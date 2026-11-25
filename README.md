@@ -51,7 +51,8 @@ bracket, because the translate pass returns the same English.
 Two columns on a wide screen: controls, video and the header form
 on the left, the transcript on the right. On a phone it stacks.
 Click a Time Code in the transcript to jump the video to that
-point and play from there.
+point and play from there. Dark mode follows the device setting
+(`prefers-color-scheme`).
 
 ## Downloads
 
