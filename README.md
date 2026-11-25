@@ -67,6 +67,14 @@ its INTERVIEW dropdown. Questions default to the interviewer,
 answers default to the first interviewee. Whisper cannot tell
 interviewees apart, so the dropdown is the way to fix it.
 
+## Models
+
+Tiny, Base, Small, Large v3 Turbo (all multilingual, `onnx-community`
+builds). Tiny is smallest and fastest, Base is the balanced default
+on phones, Small is the desktop default and much better on Tagalog,
+Large v3 Turbo is the best accuracy and needs WebGPU. English-only
+`.en` models are not offered: they cannot do Tagalog.
+
 ## Files
 
 - `docs/index.html` - the page and header form
