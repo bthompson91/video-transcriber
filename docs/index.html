@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Transcription SHEET</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<main>
+  <h1>Transcription SHEET</h1>
+
+  <section class="controls">
+    <label class="file-label">Choose video or audio file
+      <input type="file" id="file" accept="video/*,audio/*">
+    </label>
+    <div id="fileName" class="muted"></div>
+    <div id="fileMeta" class="muted"></div>
+
+    <label>Model
+      <select id="model">
+        <option value="onnx-community/whisper-base">Base - smaller download, faster</option>
+        <option value="onnx-community/whisper-small" selected>Small - better accuracy, esp. Tagalog</option>
+      </select>
+    </label>
+    <label>New row every
+      <select id="interval">
+        <option value="10">10 seconds</option>
+        <option value="30" selected>30 seconds</option>
+      </select>
+      <span class="muted">within one speaker's turn; a change of speaker always starts a new row.</span>
+    </label>
+    <label class="check"><input type="checkbox" id="translate" checked>
+      Translate Tagalog to English (in brackets, italic, after the original)</label>
+
+    <button id="start" disabled>Transcribe</button>
+    <button id="cancel" disabled>Cancel</button>
+  </section>
+
+  <section id="statusBox" hidden>
+    <div id="status">Ready.</div>
+    <progress id="progress" max="100" value="0"></progress>
+    <div id="detail" class="muted"></div>
+  </section>
+
+  <section id="videoBox" hidden>
+    <video id="preview" controls></video>
+  </section>
+
+  <h2>Sheet details</h2>
+  <p class="muted">Top half is filled in by hand, except the fields the page can work out from the file: Clip Number is the file name, File Format is the file type, HD or SD comes from the video resolution.</p>
+  <table class="header-form">
+    <tbody>
+      <tr><td><label>Story: <input id="fStory" type="text"></label></td>
+          <td><label>Locale/District: <input id="fLocale" type="text"></label></td></tr>
+      <tr><td><label>Date of event: <input id="fDate" type="text" placeholder="e.g. OCTOBER 6 2014"></label></td>
+          <td><label>Clip Numbers: <input id="fClip" type="text"></label></td></tr>
+      <tr><td><label>File Format: <input id="fFormat" type="text"></label></td>
+          <td><label>Segment: <input id="fSegment" type="text" placeholder="e.g. Interview"></label></td></tr>
+      <tr><td><label>Camera Op: <input id="fCameraOp" type="text"></label></td>
+          <td><label>Camera Used: <input id="fCameraUsed" type="text"></label></td></tr>
+      <tr><td><label>Crew Names &amp; E-mail<br><input id="fCrew" type="text"></label><br>
+              <label>Interviewer: <input id="fInterviewer" type="text"></label><br>
+              <label>PA/Sound: <input id="fPaSound" type="text"></label></td>
+          <td><label>HD or SD: <select id="fHdSd"><option value="">--</option><option>HD</option><option>SD</option></select></label><br>
+              <label>Interviewee: <input id="fInterviewee" type="text"></label><br>
+              <span class="muted">Questions are the interviewer, answers are the interviewee.</span></td></tr>
+    </tbody>
+  </table>
+  <p class="note">* For FTP uploads with no timecode, please list shots in order by CLIP NUMBER.</p>
+
+  <section id="resultBox" hidden>
+    <h2>Transcript</h2>
+    <p class="muted">Questions are bold. Click any Transcription or INTERVIEW cell to fix it, including swapping a speaker. Time Code is blank on question rows, as in the template.</p>
+    <div class="actions">
+      <button id="copyBtn">Copy table</button>
+      <button id="downloadHtml">Download sheet (.html)</button>
+      <button id="downloadTxt">Download .txt</button>
+      <button id="printBtn">Print</button>
+    </div>
+    <table id="transcript">
+      <thead><tr><th>CLIP NUMBER</th><th>Time Code</th><th>Transcription</th><th>INTERVIEW</th></tr></thead>
+      <tbody id="tbody"></tbody>
+    </table>
+  </section>
+</main>
+<script src="app.js"></script>
+</body>
+</html>
