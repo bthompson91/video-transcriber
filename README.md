@@ -18,13 +18,12 @@ isolation headers that GitHub Pages does not send. One-time ~30 MB
 core download, cached afterwards. The file still never leaves the
 device.
 
-Phone memory: the Small model plus the converter plus the video can
+Phone memory: the Turbo model plus the converter plus the video can
 make Safari reload the tab, losing the picked file. So on a phone
-the page defaults to the smaller Base model, skips the frame-rate
-check that plays the video, and saves the picked file in IndexedDB
-(and the header in localStorage) so a reload restores it. Files
-over 400 MB on a phone get a warning; a shorter clip or 1080p
-instead of 4K is safer.
+the page skips the frame-rate check that plays the video, and saves
+the picked file in IndexedDB (and the header in localStorage) so a
+reload restores it. Files over 400 MB on a phone get a warning; a
+shorter clip or 1080p instead of 4K is safer.
 
 ## How rows are made
 
@@ -38,14 +37,35 @@ A new row starts when:
   between Whisper chunks), or
 - a row reaches the chosen interval (10 or 30 seconds, default 30).
 
-Questions are bold, with a blank Time Code, as in the template.
-Answers carry a HH:MM:SS Time Code. Clip Number is the file name,
-on the first row only.
+Questions are bold. Every row carries a HH:MM:SS Time Code,
+questions included. Clip Number is the file name, on the first
+row only.
 
 If the text is in Tagalog, an English translation is added after it
 in brackets and italic, using Whisper's own translate pass on the
 same model - no second model to download. English rows get no
 bracket, because the translate pass returns the same English.
+
+## Layout
+
+Two columns on a wide screen: controls, video and the header form
+on the left, the transcript on the right. On a phone it stacks.
+Click a Time Code in the transcript to jump the video to that
+point and play from there.
+
+## Downloads
+
+Two download options, both named after the video file:
+
+- Word (.docx): the full sheet - title, header form, then the
+  CLIP NUMBER / Time Code / Transcription / INTERVIEW table.
+  Questions bold, translations in brackets and italic. Built in
+  the browser with the docx library (loaded on demand from a CDN).
+- SRT (.srt): one subtitle per row, timed from when its speech
+  starts to when it ends, with a translation on a second line
+  when there is one.
+
+`IMG_3436.MOV` downloads as `IMG_3436.docx` and `IMG_3436.srt`.
 
 ## Header form
 
@@ -69,18 +89,19 @@ interviewees apart, so the dropdown is the way to fix it.
 
 ## Models
 
-Tiny, Base, Small, Large v3 Turbo (all multilingual, `onnx-community`
-builds). Tiny is smallest and fastest, Base is the balanced default
-on phones, Small is the desktop default and much better on Tagalog,
-Large v3 Turbo is the best accuracy and needs WebGPU. English-only
-`.en` models are not offered: they cannot do Tagalog.
+Small, Large v3 Turbo (all multilingual, `onnx-community` builds).
+Large v3 Turbo is the default and the best accuracy, and needs
+WebGPU; Small is the lighter option and still good on Tagalog.
+Tiny and Base are not offered: in testing they hallucinate and
+produce poor transcripts. English-only `.en` models are not
+offered: they cannot do Tagalog.
 
 ## Files
 
 - `docs/index.html` - the page and header form
 - `docs/app.js` - audio extraction, row grouping, translation, export
 - `docs/worker.js` - Whisper in a Web Worker (transformers.js,
-  `onnx-community/whisper-base` or `whisper-small`)
+  `onnx-community/whisper-small` or `whisper-large-v3-turbo`)
 - `docs/style.css`
 
 ## Publishing

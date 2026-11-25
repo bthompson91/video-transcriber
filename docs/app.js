@@ -2,7 +2,7 @@
 // Whisper, show a transcription sheet matching the template.
 // Columns: CLIP NUMBER | Time Code | Transcription | INTERVIEW.
 // Clip Number is the file name, on the first row only.
-// Time Code is HH:MM:SS, blank on question rows, as in the template.
+// Time Code is HH:MM:SS on every row, questions included.
 // Questions are bold, interviewer. Answers are the interviewee.
 // A new row starts when the speaker changes, when the speaker stops
 // to gather their thoughts (a pause between Whisper chunks), or when
@@ -22,16 +22,15 @@
   const pending = new Map();
   let rows = [];
 
-  // Phones run out of memory easily here: the Whisper Small model,
+  // Phones run out of memory easily here: the Whisper Turbo model,
   // the converter and the video file together can make Safari reload
-  // the tab, which clears the picked file. So on a phone the smaller
-  // Base model is the default, the frame-rate check (which plays the
-  // video) is skipped, and the picked file is saved on the device so
-  // a reload restores it instead of losing it.
+  // the tab, which clears the picked file. So on a phone the
+  // frame-rate check (which plays the video) is skipped, and the
+  // picked file is saved on the device so a reload restores it
+  // instead of losing it.
   const isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent);
   const isMobile = isIOS || /Android/i.test(navigator.userAgent);
   if (isMobile) {
-    $('model').value = 'onnx-community/whisper-base';
     $('mobileNote').hidden = false;
   }
 
@@ -326,8 +325,16 @@
       const clipTd = document.createElement('td');
       clipTd.textContent = i === 0 ? $('fClip').value.trim() : '';
       const timeTd = document.createElement('td');
-      // Question rows have a blank Time Code, as in the template.
-      timeTd.textContent = row.isQuestion ? '' : formatTime(row.start);
+      timeTd.className = 'time';
+      timeTd.textContent = formatTime(row.start);
+      timeTd.title = 'Jump to this point in the video';
+      timeTd.addEventListener('click', () => {
+        const preview = $('preview');
+        if (!preview || !preview.src) return;
+        preview.currentTime = row.start;
+        preview.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        preview.play().catch(() => { /* the seek still lands even if play is blocked */ });
+      });
       const textTd = document.createElement('td');
       textTd.contentEditable = 'true';
       if (row.isQuestion) textTd.classList.add('question');
@@ -367,31 +374,106 @@
     resultBox.hidden = rows.length === 0;
   }
 
-  function tableAsText() {
-    return rows.map((r) => (r.isQuestion ? '' : formatTime(r.start)) + '\t' + r.text +
-      (r.translation ? ' [' + r.translation + ']' : '') + '\t' + (r.speakerOverride || speakerName(r))).join('\n');
+  // Downloads take the video's own file name, just a different
+  // extension: IMG_3436.MOV -> IMG_3436.docx / IMG_3436.srt.
+  function baseName() {
+    if (!file) return 'transcript';
+    return file.name.replace(/\.[^.]+$/, '') || 'transcript';
   }
 
-  function tableAsHtml() {
-    const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-    const head = [
-      ['Story', $('fStory').value], ['Local Congregation', $('fLocale').value],
-      ['Date of event', $('fDate').value], ['Clip Numbers', $('fClip').value],
-      ['File Format', $('fFormat').value], ['Segment', $('fSegment').value],
-      ['Camera Op', $('fCameraOp').value], ['Camera Used', $('fCameraUsed').value],
-      ['Interviewer', $('fInterviewer').value], ['Interviewees', $('fInterviewees').value],
-      ['PA/Sound', $('fPaSound').value], ['Codec', $('fCodec').value],
-      ['Frame rate', $('fFrameRate').value], ['Bitrate', $('fBitrate').value],
-    ].map(([k, v]) => '<tr><td><b>' + esc(k) + ':</b></td><td>' + esc(v) + '</td></tr>').join('\n');
-    const body = rows.map((r, i) =>
-      '<tr><td>' + (i === 0 ? esc($('fClip').value) : '') + '</td><td>' + (r.isQuestion ? '' : formatTime(r.start)) + '</td><td>' +
-      (r.isQuestion ? '<b>' + esc(r.text) + '</b>' : esc(r.text)) +
-      (r.translation ? ' <i>[' + esc(r.translation) + ']</i>' : '') + '</td><td>' +
-      esc(r.speakerOverride || speakerName(r)) + '</td></tr>').join('\n');
-    return '<!DOCTYPE html>\n<html><head><meta charset="utf-8"><title>Transcription Sheet - ' +
-      esc($('fClip').value) + '</title></head><body>\n<h1>Transcription Sheet</h1>\n<table>\n' + head +
-      '\n</table>\n<table>\n<tr><th>CLIP NUMBER</th><th>Time Code</th><th>Transcription</th><th>INTERVIEW</th></tr>\n' +
-      body + '\n</table>\n</body></html>\n';
+  function downloadBlob(name, blob) {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = name; a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
+
+  // SRT timestamps are HH:MM:SS,mmm. Each row is one subtitle, from
+  // when its speech starts to when it ends (at least half a second
+  // on screen). A translation, when there is one, goes on a second
+  // line in brackets, as in the sheet.
+  function srtTime(seconds) {
+    const ms = Math.max(0, Math.round((seconds || 0) * 1000));
+    const h = Math.floor(ms / 3600000), m = Math.floor((ms % 3600000) / 60000);
+    const s = Math.floor((ms % 60000) / 1000), rem = ms % 1000;
+    return String(h).padStart(2, '0') + ':' + String(m).padStart(2, '0') + ':' +
+      String(s).padStart(2, '0') + ',' + String(rem).padStart(3, '0');
+  }
+
+  function rowsToSrt() {
+    return rows.map((r, i) => {
+      const start = srtTime(r.start);
+      const end = srtTime(Math.max(r.end, r.start + 0.5));
+      let text = r.text;
+      if (r.translation) text += '\n[' + r.translation + ']';
+      return (i + 1) + '\n' + start + ' --> ' + end + '\n' + text;
+    }).join('\n\n') + '\n';
+  }
+
+  // Word download, built in the browser with the docx library
+  // (loaded on demand from a CDN, cached afterwards, the same way
+  // the ffmpeg converter loads). Same sheet as the page: title,
+  // header form, then the CLIP NUMBER / Time Code / Transcription /
+  // INTERVIEW table. Questions are bold, translations are in
+  // brackets and italic after the original. Nothing else in the
+  // document: no notes, no FTP line.
+  let docxPromise = null;
+  function loadDocxLib() {
+    if (docxPromise) return docxPromise;
+    docxPromise = new Promise((resolve, reject) => {
+      if (window.docx) { resolve(window.docx); return; }
+      const script = document.createElement('script');
+      script.src = 'https://cdn.jsdelivr.net/npm/docx@8.5.0/build/index.umd.js';
+      script.onload = () => (window.docx ? resolve(window.docx) : reject(new Error('Could not load the Word writer.')));
+      script.onerror = () => reject(new Error('Could not load the Word writer.'));
+      document.head.appendChild(script);
+    });
+    return docxPromise;
+  }
+
+  async function downloadDocx() {
+    if (!rows.length) return;
+    setStatus('Building the Word document...', 100);
+    try {
+      const docx = await loadDocxLib();
+      const { Document, Packer, Paragraph, TextRun, Table, TableRow, TableCell, WidthType, HeadingLevel } = docx;
+      const headerFields = [
+        ['Story', $('fStory').value], ['Local Congregation', $('fLocale').value],
+        ['Date of event', $('fDate').value], ['Clip Numbers', $('fClip').value],
+        ['File Format', $('fFormat').value], ['Segment', $('fSegment').value],
+        ['Camera Op', $('fCameraOp').value], ['Camera Used', $('fCameraUsed').value],
+        ['Crew Names & E-mail', $('fCrew').value], ['Interviewer', $('fInterviewer').value],
+        ['Interviewees', $('fInterviewees').value], ['PA/Sound', $('fPaSound').value],
+        ['Codec', $('fCodec').value], ['Frame rate', $('fFrameRate').value],
+        ['Bitrate', $('fBitrate').value],
+      ];
+      const headerParas = headerFields.map(([k, v]) =>
+        new Paragraph({ children: [new TextRun({ text: k + ': ', bold: true }), new TextRun(v || '')] }));
+      const widths = [18, 12, 50, 20];
+      const headRow = new TableRow({ children: ['CLIP NUMBER', 'Time Code', 'Transcription', 'INTERVIEW'].map((t, i) =>
+        new TableCell({ width: { size: widths[i], type: WidthType.PERCENTAGE }, children: [new Paragraph({ children: [new TextRun({ text: t, bold: true })] })] })) });
+      const bodyRows = rows.map((r, i) => {
+        const textRuns = [new TextRun({ text: r.text, bold: !!r.isQuestion })];
+        if (r.translation) textRuns.push(new TextRun({ text: ' [' + r.translation + ']', italics: true }));
+        return new TableRow({ children: [
+          new TableCell({ width: { size: widths[0], type: WidthType.PERCENTAGE }, children: [new Paragraph(i === 0 ? $('fClip').value : '')] }),
+          new TableCell({ width: { size: widths[1], type: WidthType.PERCENTAGE }, children: [new Paragraph(formatTime(r.start))] }),
+          new TableCell({ width: { size: widths[2], type: WidthType.PERCENTAGE }, children: [new Paragraph({ children: textRuns })] }),
+          new TableCell({ width: { size: widths[3], type: WidthType.PERCENTAGE }, children: [new Paragraph(r.speakerOverride || speakerName(r))] }),
+        ] });
+      });
+      const doc = new Document({ sections: [{ children: [
+        new Paragraph({ text: 'Transcription Sheet', heading: HeadingLevel.TITLE }),
+        ...headerParas,
+        new Paragraph({ text: '' }),
+        new Table({ width: { size: 100, type: WidthType.PERCENTAGE }, rows: [headRow, ...bodyRows] }),
+      ] }] });
+      const blob = await Packer.toBlob(doc);
+      downloadBlob(baseName() + '.docx', blob);
+      setStatus('Word document downloaded.', 100);
+    } catch (e) {
+      setStatus('Failed: ' + (e && e.message ? e.message : e), 100);
+    }
   }
 
   function download(name, content, type) {
@@ -441,6 +523,9 @@
       });
       video.pause();
       video.currentTime = 0;
+      // The measurement plays at 2x speed; put it back to normal or
+      // the video plays fast when the user presses play.
+      video.playbackRate = 1;
       if (samples.length < 2) return null;
       const first = samples[0], last = samples[samples.length - 1];
       const dt = last.mediaTime - first.mediaTime;
@@ -449,6 +534,7 @@
       return df / dt;
     } catch (e) {
       try { video.pause(); } catch (err) { /* ignore */ }
+      try { video.playbackRate = 1; } catch (err) { /* ignore */ }
       return null;
     }
   }
@@ -559,7 +645,7 @@
         }
       }
       setStatus('Done. ' + rows.length + ' rows.', 100);
-      detailEl.textContent = 'Times are HH:MM:SS. Question rows have a blank Time Code, as in the template.';
+      detailEl.textContent = 'Times are HH:MM:SS on every row.';
     } catch (e) {
       if (!cancelled) setStatus('Failed: ' + (e && e.message ? e.message : e), progressEl.value);
     } finally {
@@ -577,21 +663,11 @@
     cancelBtn.disabled = true;
   });
 
-  $('copyBtn').addEventListener('click', async () => {
-    try {
-      await navigator.clipboard.writeText(tableAsText());
-      setStatus('Copied to clipboard.', 100);
-    } catch (e) {
-      setStatus('Copy failed - select the table and copy it manually.', 100);
-    }
+  $('downloadDocx').addEventListener('click', downloadDocx);
+  $('downloadSrt').addEventListener('click', () => {
+    if (!rows.length) return;
+    download(baseName() + '.srt', rowsToSrt(), 'text/plain');
   });
-  $('downloadHtml').addEventListener('click', () => {
-    download((file ? file.name.replace(/\.[^.]+$/, '') : 'transcript') + '-transcript.html', tableAsHtml(), 'text/html');
-  });
-  $('downloadTxt').addEventListener('click', () => {
-    download((file ? file.name.replace(/\.[^.]+$/, '') : 'transcript') + '-transcript.txt', tableAsText(), 'text/plain');
-  });
-  $('printBtn').addEventListener('click', () => window.print());
   $('fInterviewer').addEventListener('input', renderRows);
   $('fInterviewees').addEventListener('input', renderRows);
   $('fClip').addEventListener('input', renderRows);

@@ -2,8 +2,8 @@
 //
 // Runs in a module Web Worker so model loading and transcription never
 // block the page. Loads transformers.js from the CDN on first use, then
-// the chosen multilingual Whisper model (onnx-community/whisper-base or
-// whisper-small), cached by the browser afterwards. WebGPU when the
+// the chosen multilingual Whisper model (onnx-community/whisper-small or
+// whisper-large-v3-turbo), cached by the browser afterwards. WebGPU when the
 // device offers it, WASM otherwise. Audio arrives as a Float32Array of
 // 16 kHz mono samples.
 //

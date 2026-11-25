@@ -10,84 +10,84 @@
 <main>
   <h1>Transcription Sheet</h1>
 
-  <section class="controls">
-    <label class="file-label">Choose video or audio file
-      <input type="file" id="file" accept="video/*,audio/*">
-    </label>
-    <div id="fileName" class="muted"></div>
-    <div id="fileMeta" class="muted"></div>
-    <div id="mobileNote" class="muted" hidden>Phone: using the smaller Base model to save memory. Small may reload the page on a phone. Your video is saved on this device, so a reload restores it.</div>
-    <div class="muted">Nothing is uploaded. On a phone, some camera files (like .mts) can't be read directly, so the page converts them first on your device.</div>
+  <div class="layout">
+    <div class="left">
+      <section class="controls">
+        <label class="file-label">Choose video or audio file
+          <input type="file" id="file" accept="video/*,audio/*">
+        </label>
+        <div id="fileName" class="muted"></div>
+        <div id="fileMeta" class="muted"></div>
+        <div id="mobileNote" class="muted" hidden>Phone: the Turbo model is heavy and may reload the page if memory runs low. Your video is saved on this device, so a reload restores it.</div>
+        <div class="muted">Nothing is uploaded. On a phone, some camera files (like .mts) can't be read directly, so the page converts them first on your device.</div>
 
-    <label>Model
-      <select id="model">
-        <option value="onnx-community/whisper-tiny">Tiny - smallest download, fastest, roughest</option>
-        <option value="onnx-community/whisper-base">Base - smaller download, faster</option>
-        <option value="onnx-community/whisper-small" selected>Small - better accuracy, esp. Tagalog</option>
-        <option value="onnx-community/whisper-large-v3-turbo">Large v3 Turbo - best accuracy, heavy, needs WebGPU</option>
-      </select>
-    </label>
-    <label>New row every
-      <select id="interval">
-        <option value="10">10 seconds</option>
-        <option value="30" selected>30 seconds</option>
-      </select>
-      <span class="muted">within one speaker's turn; a change of speaker always starts a new row.</span>
-    </label>
-    <label class="check"><input type="checkbox" id="translate" checked>
-      Translate Tagalog to English (in brackets, italic, after the original)</label>
+        <label>Model
+          <select id="model">
+            <option value="onnx-community/whisper-small">Small - lighter, good accuracy, esp. Tagalog</option>
+            <option value="onnx-community/whisper-large-v3-turbo" selected>Large v3 Turbo - best accuracy, heavy, needs WebGPU</option>
+          </select>
+        </label>
+        <label>New row every
+          <select id="interval">
+            <option value="10">10 seconds</option>
+            <option value="30" selected>30 seconds</option>
+          </select>
+          <span class="muted">within one speaker's turn; a change of speaker always starts a new row.</span>
+        </label>
+        <label class="check"><input type="checkbox" id="translate" checked>
+          Translate Tagalog to English (in brackets, italic, after the original)</label>
 
-    <button id="start" disabled>Transcribe</button>
-    <button id="cancel" disabled>Cancel</button>
-  </section>
+        <button id="start" disabled>Transcribe</button>
+        <button id="cancel" disabled>Cancel</button>
+      </section>
 
-  <section id="statusBox" hidden>
-    <div id="status">Ready.</div>
-    <progress id="progress" max="100" value="0"></progress>
-    <div id="detail" class="muted"></div>
-  </section>
+      <section id="statusBox" hidden>
+        <div id="status">Ready.</div>
+        <progress id="progress" max="100" value="0"></progress>
+        <div id="detail" class="muted"></div>
+      </section>
 
-  <section id="videoBox" hidden>
-    <video id="preview" controls playsinline muted></video>
-  </section>
+      <section id="videoBox" hidden>
+        <video id="preview" controls playsinline muted></video>
+      </section>
 
-  <h2>Sheet details</h2>
-  <p class="muted">Top half is filled in by hand, except the fields the page can work out from the file: Clip Number is the file name, File Format is the file type, Codec comes from the file itself where it can be read, Frame rate is measured from the video, and Bitrate is file size divided by duration.</p>
-  <table class="header-form">
-    <tbody>
-      <tr><td><label>Story: <input id="fStory" type="text"></label></td>
-          <td><label>Local Congregation: <input id="fLocale" type="text"></label></td></tr>
-      <tr><td><label>Date of event: <input id="fDate" type="text" placeholder="e.g. OCTOBER 6 2014"></label></td>
-          <td><label>Clip Numbers: <input id="fClip" type="text"></label></td></tr>
-      <tr><td><label>File Format: <input id="fFormat" type="text"></label></td>
-          <td><label>Segment: <input id="fSegment" type="text" placeholder="e.g. Interview"></label></td></tr>
-      <tr><td><label>Camera Op: <input id="fCameraOp" type="text"></label></td>
-          <td><label>Camera Used: <input id="fCameraUsed" type="text"></label></td></tr>
-      <tr><td><label>Crew Names &amp; E-mail<br><input id="fCrew" type="text"></label><br>
-              <label>Interviewer: <input id="fInterviewer" type="text"></label><br>
-              <label>PA/Sound: <input id="fPaSound" type="text"></label></td>
-          <td><label>Interviewees (comma separated): <input id="fInterviewees" type="text" placeholder="e.g. First interviewee, Second interviewee"></label><br>
-              <label>Codec: <input id="fCodec" type="text"></label><br>
-              <label>Frame rate: <input id="fFrameRate" type="text" placeholder="e.g. 25 fps"></label><br>
-              <label>Bitrate: <input id="fBitrate" type="text" placeholder="e.g. 12.4 Mbps"></label><br>
-              <span class="muted">Questions are the interviewer, answers are one of the interviewees. Pick the speaker on each row.</span></td></tr>
-    </tbody>
-  </table>
-
-  <section id="resultBox" hidden>
-    <h2>Transcript</h2>
-    <p class="muted">Questions are bold. Click any Transcription or INTERVIEW cell to fix it, including swapping a speaker. Time Code is blank on question rows, as in the template.</p>
-    <div class="actions">
-      <button id="copyBtn">Copy table</button>
-      <button id="downloadHtml">Download sheet (.html)</button>
-      <button id="downloadTxt">Download .txt</button>
-      <button id="printBtn">Print</button>
+      <h2>Sheet details</h2>
+      <p class="muted">Top half is filled in by hand, except the fields the page can work out from the file: Clip Number is the file name, File Format is the file type, Codec comes from the file itself where it can be read, Frame rate is measured from the video, and Bitrate is file size divided by duration.</p>
+      <table class="header-form">
+        <tbody>
+          <tr><td><label>Story: <input id="fStory" type="text"></label></td>
+              <td><label>Local Congregation: <input id="fLocale" type="text"></label></td></tr>
+          <tr><td><label>Date of event: <input id="fDate" type="text" placeholder="e.g. OCTOBER 6 2014"></label></td>
+              <td><label>Clip Numbers: <input id="fClip" type="text"></label></td></tr>
+          <tr><td><label>File Format: <input id="fFormat" type="text"></label></td>
+              <td><label>Segment: <input id="fSegment" type="text" placeholder="e.g. Interview"></label></td></tr>
+          <tr><td><label>Camera Op: <input id="fCameraOp" type="text"></label></td>
+              <td><label>Camera Used: <input id="fCameraUsed" type="text"></label></td></tr>
+          <tr><td><label>Crew Names &amp; E-mail<br><input id="fCrew" type="text"></label><br>
+                  <label>Interviewer: <input id="fInterviewer" type="text"></label><br>
+                  <label>PA/Sound: <input id="fPaSound" type="text"></label></td>
+              <td><label>Interviewees (comma separated): <input id="fInterviewees" type="text" placeholder="e.g. First interviewee, Second interviewee"></label><br>
+                  <label>Codec: <input id="fCodec" type="text"></label><br>
+                  <label>Frame rate: <input id="fFrameRate" type="text" placeholder="e.g. 25 fps"></label><br>
+                  <label>Bitrate: <input id="fBitrate" type="text" placeholder="e.g. 12.4 Mbps"></label><br>
+                  <span class="muted">Questions are the interviewer, answers are one of the interviewees. Pick the speaker on each row.</span></td></tr>
+        </tbody>
+      </table>
     </div>
-    <table id="transcript">
-      <thead><tr><th>CLIP NUMBER</th><th>Time Code</th><th>Transcription</th><th>INTERVIEW</th></tr></thead>
-      <tbody id="tbody"></tbody>
-    </table>
-  </section>
+
+    <section id="resultBox" class="right" hidden>
+      <h2>Transcript</h2>
+      <p class="muted">Questions are bold. Click a Time Code to jump to that part of the video. Click any Transcription or INTERVIEW cell to fix it, including swapping a speaker.</p>
+      <div class="actions">
+        <button id="downloadDocx">Download Word (.docx)</button>
+        <button id="downloadSrt">Download SRT (.srt)</button>
+      </div>
+      <table id="transcript">
+        <thead><tr><th>CLIP NUMBER</th><th>Time Code</th><th>Transcription</th><th>INTERVIEW</th></tr></thead>
+        <tbody id="tbody"></tbody>
+      </table>
+    </section>
+  </div>
 </main>
 <script src="app.js"></script>
 </body>

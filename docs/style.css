@@ -1,5 +1,12 @@
 body { font-family: system-ui, -apple-system, sans-serif; margin: 0; background: #f6f0e3; color: #222; }
-main { max-width: 900px; margin: 0 auto; padding: 24px 16px 64px; }
+main { max-width: 1400px; margin: 0 auto; padding: 24px 16px 64px; }
+.layout { display: flex; gap: 24px; align-items: flex-start; }
+.layout .left { flex: 1 1 420px; min-width: 0; }
+.layout .right { flex: 2 1 520px; min-width: 0; }
+@media (max-width: 900px) {
+  .layout { flex-direction: column; }
+  .layout .left, .layout .right { flex: none; width: 100%; }
+}
 h1 { text-align: center; margin-bottom: 4px; }
 h2 { margin-top: 28px; }
 .muted { color: #666; font-size: 14px; }
@@ -24,10 +31,12 @@ thead th { text-align: center; background: #eee; }
 #transcript td:nth-child(2), #transcript th:nth-child(2) { width: 90px; text-align: center; font-variant-numeric: tabular-nums; }
 #transcript td:nth-child(4), #transcript th:nth-child(4) { width: 140px; }
 #transcript td.question { font-weight: 700; }
+#transcript td.time { cursor: pointer; color: #2563eb; text-decoration: underline; }
 td .translation { font-style: italic; font-weight: 400; }
 td[contenteditable]:focus { outline: 2px solid #2563eb; }
 .header-form td { border: 1px solid #999; }
 @media print {
   .controls, #statusBox, .actions, #videoBox { display: none; }
+  .layout { display: block; }
   body { background: #fff; }
 }
