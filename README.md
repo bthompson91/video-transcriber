@@ -9,10 +9,13 @@ and the page downloads a multilingual Whisper model once (cached by
 the browser afterwards) and transcribes the audio on your device.
 
 Phone decoding: iOS Safari cannot decode .mts / .m2ts (AVCHD) and
-some camera formats, so if the browser's own decoder fails, the page
-falls back to ffmpeg.wasm (0.11, single-threaded) to convert the
-file to a 16 kHz mono WAV in the browser first. One-time ~30 MB core
-download, cached afterwards. The file still never leaves the device.
+chokes on some iPhone-recorded .mov files too, so if the browser's
+own decoder fails, the page falls back to ffmpeg.wasm to convert the
+file to a 16 kHz mono WAV in the browser first. It uses the
+single-threaded core (@ffmpeg/core-st 0.11.1): the normal core needs
+SharedArrayBuffer, which needs cross-origin isolation headers that
+GitHub Pages does not send. One-time ~30 MB core download, cached
+afterwards. The file still never leaves the device.
 
 ## How rows are made
 

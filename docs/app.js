@@ -85,8 +85,13 @@
       script.src = 'https://unpkg.com/@ffmpeg/ffmpeg@0.11.6/dist/ffmpeg.min.js';
       script.onload = async () => {
         try {
+          // core-st is the single-threaded build. The normal core
+          // needs SharedArrayBuffer, which needs cross-origin
+          // isolation headers that GitHub Pages does not send, so it
+          // fails with "Can't find variable: SharedArrayBuffer".
+          // core-st runs without it, a bit slower.
           const ffmpeg = window.FFmpeg.createFFmpeg({
-            corePath: 'https://unpkg.com/@ffmpeg/core@0.11.0/dist/ffmpeg-core.js',
+            corePath: 'https://unpkg.com/@ffmpeg/core-st@0.11.1/dist/ffmpeg-core.js',
             log: false,
           });
           setStatus('Loading the file converter (one-time download)...', progressEl.value);
