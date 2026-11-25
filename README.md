@@ -46,13 +46,23 @@ in brackets and italic, using Whisper's own translate pass on the
 same model - no second model to download. English rows get no
 bracket, because the translate pass returns the same English.
 
+The first pass transcribes only: it is told the language is
+Tagalog (`tl`), so Tagalog speech comes out as Tagalog text.
+transformers.js defaults the language to English when none is
+given, and Whisper told the language is English will output
+English for Tagalog audio - translating on the transcribe pass
+instead of transcribing it. The English version comes only from
+the separate translate pass.
+
 ## Layout
 
 Two columns on a wide screen: controls, video and the header form
 on the left, the transcript on the right. On a phone it stacks.
-Click a Time Code in the transcript to jump the video to that
-point and play from there. Dark mode follows the device setting
-(`prefers-color-scheme`).
+The video is sticky: it stays on screen while you scroll down
+the transcript. Click a Time Code in the transcript to jump the
+video to that point and play from there. Dark mode follows the
+device setting (`prefers-color-scheme`); it is dark blue, not
+brown.
 
 ## Downloads
 

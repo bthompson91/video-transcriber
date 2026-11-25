@@ -65,10 +65,17 @@ self.onmessage = async (event) => {
       self.postMessage({ id, ok: true });
     } else if (msg.type === 'transcribe') {
       const transcriber = await getTranscriber(msg.model);
-      // Language is left unset so Whisper auto-detects per chunk: the
-      // videos mix English and Tagalog, and forcing 'tl' would mangle
-      // the English parts (and vice versa).
+      // Language is set to Tagalog, not left to the default.
+      // transformers.js defaults the language to English when none
+      // is given, and Whisper told the language is English will
+      // output English for Tagalog audio - translating on the
+      // transcribe pass instead of transcribing it. Setting 'tl'
+      // makes the first pass transcribe the Tagalog as Tagalog.
+      // The English translation is a separate step (the translate
+      // task), not this pass. The task is transcribe, explicitly.
       const out = await transcriber(msg.audio, {
+        task: 'transcribe',
+        language: 'tl',
         chunk_length_s: 30,
         stride_length_s: 5,
         return_timestamps: true,
