@@ -41,10 +41,13 @@ Questions are bold. Every row carries a HH:MM:SS Time Code,
 questions included. Clip Number is the file name, on the first
 row only.
 
-If the text is in Tagalog, an English translation is added after it
-in brackets and italic, using Whisper's own translate pass on the
-same model - no second model to download. English rows get no
-bracket, because the translate pass returns the same English.
+If the text is in Tagalog and the Translate box is ticked, an
+English translation is added after it in brackets and italic,
+using Whisper's own translate pass on the same model - no second
+model to download. Translation is off by default: the translate
+pass can get stuck repeating a word, so it only runs when you
+ask for it. English rows get no bracket, because the translate
+pass returns the same English.
 
 The first pass transcribes only: it is told the language is
 Tagalog (`tl`), so Tagalog speech comes out as Tagalog text.
