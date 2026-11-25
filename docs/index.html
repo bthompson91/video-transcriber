@@ -16,6 +16,7 @@
     </label>
     <div id="fileName" class="muted"></div>
     <div id="fileMeta" class="muted"></div>
+    <div id="mobileNote" class="muted" hidden>Phone: using the smaller Base model to save memory. Small may reload the page on a phone. Your video is saved on this device, so a reload restores it.</div>
     <div class="muted">Nothing is uploaded. On a phone, some camera files (like .mts) can't be read directly, so the page converts them first on your device.</div>
 
     <label>Model
@@ -45,7 +46,7 @@
   </section>
 
   <section id="videoBox" hidden>
-    <video id="preview" controls></video>
+    <video id="preview" controls playsinline muted></video>
   </section>
 
   <h2>Sheet details</h2>

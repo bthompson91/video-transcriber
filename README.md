@@ -12,10 +12,19 @@ Phone decoding: iOS Safari cannot decode .mts / .m2ts (AVCHD) and
 chokes on some iPhone-recorded .mov files too, so if the browser's
 own decoder fails, the page falls back to ffmpeg.wasm to convert the
 file to a 16 kHz mono WAV in the browser first. It uses the
-single-threaded core (@ffmpeg/core-st 0.11.1): the normal core needs
-SharedArrayBuffer, which needs cross-origin isolation headers that
-GitHub Pages does not send. One-time ~30 MB core download, cached
-afterwards. The file still never leaves the device.
+single-threaded core (@ffmpeg/core-st 0.11.1, with mainName 'main'):
+the normal core needs SharedArrayBuffer, which needs cross-origin
+isolation headers that GitHub Pages does not send. One-time ~30 MB
+core download, cached afterwards. The file still never leaves the
+device.
+
+Phone memory: the Small model plus the converter plus the video can
+make Safari reload the tab, losing the picked file. So on a phone
+the page defaults to the smaller Base model, skips the frame-rate
+check that plays the video, and saves the picked file in IndexedDB
+(and the header in localStorage) so a reload restores it. Files
+over 400 MB on a phone get a warning; a shorter clip or 1080p
+instead of 4K is safer.
 
 ## How rows are made
 

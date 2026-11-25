@@ -22,6 +22,71 @@
   const pending = new Map();
   let rows = [];
 
+  // Phones run out of memory easily here: the Whisper Small model,
+  // the converter and the video file together can make Safari reload
+  // the tab, which clears the picked file. So on a phone the smaller
+  // Base model is the default, the frame-rate check (which plays the
+  // video) is skipped, and the picked file is saved on the device so
+  // a reload restores it instead of losing it.
+  const isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent);
+  const isMobile = isIOS || /Android/i.test(navigator.userAgent);
+  if (isMobile) {
+    $('model').value = 'onnx-community/whisper-base';
+    $('mobileNote').hidden = false;
+  }
+
+  function openDb() {
+    return new Promise((resolve, reject) => {
+      const req = indexedDB.open('video-transcriber', 1);
+      req.onupgradeneeded = () => req.result.createObjectStore('files');
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = () => reject(req.error);
+    });
+  }
+
+  // Save the picked file on the device. If Safari reloads the page,
+  // it is restored on load. Failures are silent: no save just means
+  // no restore, transcription still works.
+  async function saveFileOnDevice(f) {
+    try {
+      const db = await openDb();
+      await new Promise((res, rej) => {
+        const tx = db.transaction('files', 'readwrite');
+        tx.objectStore('files').put(f, 'lastVideo');
+        tx.oncomplete = res;
+        tx.onerror = () => rej(tx.error);
+      });
+    } catch (e) { /* ignore */ }
+  }
+
+  async function loadSavedFile() {
+    try {
+      const db = await openDb();
+      return await new Promise((res, rej) => {
+        const tx = db.transaction('files', 'readonly');
+        const rq = tx.objectStore('files').get('lastVideo');
+        rq.onsuccess = () => res(rq.result || null);
+        rq.onerror = () => rej(rq.error);
+      });
+    } catch (e) { return null; }
+  }
+
+  // Header fields survive a reload too, in localStorage.
+  const headerIds = ['fStory', 'fLocale', 'fDate', 'fClip', 'fFormat', 'fSegment', 'fCameraOp', 'fCameraUsed', 'fCrew', 'fInterviewer', 'fInterviewees', 'fPaSound', 'fCodec', 'fFrameRate', 'fBitrate'];
+  function saveHeader() {
+    try {
+      const data = {};
+      for (const id of headerIds) data[id] = $(id).value;
+      localStorage.setItem('vt-header', JSON.stringify(data));
+    } catch (e) { /* ignore */ }
+  }
+  function restoreHeader() {
+    try {
+      const data = JSON.parse(localStorage.getItem('vt-header') || '{}');
+      for (const id of headerIds) if (typeof data[id] === 'string') $(id).value = data[id];
+    } catch (e) { /* ignore */ }
+  }
+
   function setStatus(text, pct) {
     statusBox.hidden = false;
     statusEl.textContent = text;
@@ -420,21 +485,40 @@
       } else if (ext === 'webm') {
         $('fCodec').value = 'WebM (VP8 / VP9 / AV1)';
       }
-      const fps = await measureFrameRate(preview);
+      // On iOS, playing the video to measure frame rate costs memory
+      // and jumps to fullscreen without playsinline; leave the field
+      // editable instead.
+      const fps = isIOS ? null : await measureFrameRate(preview);
       if (fps) $('fFrameRate').value = fps.toFixed(2).replace(/\.?0+$/, '') + ' fps';
     }, { once: true });
   }
 
-  fileInput.addEventListener('change', () => {
-    file = fileInput.files && fileInput.files[0] ? fileInput.files[0] : null;
+  function pickFile(f, restored) {
+    file = f;
     $('fileName').textContent = file ? file.name + ' (' + (file.size / 1048576).toFixed(1) + ' MB)' : '';
-    $('fileMeta').textContent = '';
+    $('fileMeta').textContent = restored ? 'Restored after a reload.' : '';
     startBtn.disabled = !file;
     if (file) {
+      if (isMobile && file.size > 400 * 1024 * 1024) {
+        detailEl.textContent = 'That file is over 400 MB. A phone may run out of memory on it; a shorter clip, or 1080p instead of 4K, is safer.';
+        statusBox.hidden = false;
+      }
       $('videoBox').hidden = false;
       $('preview').src = URL.createObjectURL(file);
       autoFillFromFile();
+      if (!restored) saveFileOnDevice(file);
     }
+  }
+
+  fileInput.addEventListener('change', () => {
+    pickFile(fileInput.files && fileInput.files[0] ? fileInput.files[0] : null, false);
+  });
+
+  // Restore the header and the last picked file after a reload.
+  restoreHeader();
+  for (const id of headerIds) $(id).addEventListener('input', saveHeader);
+  loadSavedFile().then((saved) => {
+    if (saved && saved.name) pickFile(saved, true);
   });
 
   startBtn.addEventListener('click', async () => {
