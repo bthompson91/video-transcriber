@@ -35,7 +35,7 @@ A new row starts when:
   INTERVIEW cell is editable to fix a speaker),
 - the speaker stops to gather their thoughts (a pause of 0.8s or more
   between Whisper chunks), or
-- a row reaches the chosen interval (10 or 30 seconds, default 30).
+- a row reaches the chosen interval (10 or 30 seconds, default 10).
 
 Questions are bold. Every row carries a HH:MM:SS Time Code,
 questions included. Clip Number is the file name, on the first
@@ -58,11 +58,13 @@ the separate translate pass.
 
 Two columns on a wide screen: controls, video and the header form
 on the left, the transcript on the right. On a phone it stacks.
-The video is sticky: it stays on screen while you scroll down
-the transcript. Click a Time Code in the transcript to jump the
-video to that point and play from there. Dark mode follows the
-device setting (`prefers-color-scheme`); it is dark blue, not
-brown.
+On a wide screen the page itself does not scroll: the left side
+and the transcript are each their own scrollable frame, so you
+can scroll one without losing your place in the other. The video
+is not pinned; it scrolls with the left frame. Click a Time Code
+in the transcript to jump the video to that point and play from
+there. Dark mode follows the device setting
+(`prefers-color-scheme`); it is dark blue, not brown.
 
 ## Downloads
 

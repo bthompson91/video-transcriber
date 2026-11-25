@@ -34,11 +34,19 @@ main { max-width: 1400px; margin: 0 auto; padding: 24px 16px 64px; }
 .layout { display: flex; gap: 24px; align-items: stretch; }
 .layout .left { flex: 1 1 420px; min-width: 0; }
 .layout .right { flex: 2 1 520px; min-width: 0; }
-#videoBox { position: sticky; top: 12px; z-index: 5; }
 @media (max-width: 900px) {
   .layout { flex-direction: column; }
   .layout .left, .layout .right { flex: none; width: 100%; }
-  .layout .left { display: contents; }
+}
+/* Wide screen: the page itself does not scroll. The left side and
+   the transcript are each their own scrollable frame, so you can
+   scroll one without losing your place in the other. The video is
+   not pinned; it scrolls with the left frame. */
+@media (min-width: 901px) {
+  body { overflow: hidden; }
+  main { height: 100vh; height: 100dvh; box-sizing: border-box; display: flex; flex-direction: column; overflow: hidden; padding-bottom: 16px; }
+  .layout { flex: 1; min-height: 0; }
+  .layout .left, .layout .right { overflow-y: auto; min-height: 0; }
 }
 h1 { text-align: center; margin-bottom: 4px; }
 h2 { margin-top: 28px; }
