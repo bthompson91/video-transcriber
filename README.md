@@ -43,11 +43,15 @@ row only.
 
 If the text is in Tagalog and the Translate box is ticked, an
 English translation is added after it in brackets and italic,
-using Whisper's own translate pass on the same model - no second
-model to download. Translation is off by default: the translate
-pass can get stuck repeating a word, so it only runs when you
-ask for it. English rows get no bracket, because the translate
-pass returns the same English.
+using a local text model, not Whisper: Helsinki-NLP's opus-mt-tl-en
+(Tagalog to English), converted to ONNX and int8 quantized, hosted
+on Hugging Face Hub as brendo91/opus-mt-tl-en-onnx (~133 MB). It
+translates the transcribed text, so it cannot loop the way
+Whisper's translate pass did (that pass once filled a bracket with
+"I think" repeated hundreds of times). Translation is off by
+default and the model only downloads when you tick the box, cached
+afterwards. English rows get no bracket, because the model returns
+the same English.
 
 The first pass transcribes only: it is told the language is
 Tagalog (`tl`), so Tagalog speech comes out as Tagalog text.
@@ -55,7 +59,8 @@ transformers.js defaults the language to English when none is
 given, and Whisper told the language is English will output
 English for Tagalog audio - translating on the transcribe pass
 instead of transcribing it. The English version comes only from
-the separate translate pass.
+the separate text translation model, which translates the
+transcribed text, not the audio.
 
 ## Layout
 
@@ -112,12 +117,22 @@ Tiny and Base are not offered: in testing they hallucinate and
 produce poor transcripts. English-only `.en` models are not
 offered: they cannot do Tagalog.
 
+Translation uses a separate local text model: Helsinki-NLP
+opus-mt-tl-en (Tagalog to English), converted to ONNX and int8
+quantized (encoder + merged decoder, ~133 MB total), hosted on
+Hugging Face Hub as brendo91/opus-mt-tl-en-onnx. There is no
+ready-made ONNX version of it, so it was exported with optimum
+and quantized by hand; the decoder must be the merged KV-cache
+variant or generation loops. It loads from the Hub, like the
+Whisper models, only when the Translate box is ticked.
+
 ## Files
 
 - `docs/index.html` - the page and header form
 - `docs/app.js` - audio extraction, row grouping, translation, export
 - `docs/worker.js` - Whisper in a Web Worker (transformers.js,
-  `onnx-community/whisper-small` or `whisper-large-v3-turbo`)
+  `onnx-community/whisper-small` or `whisper-large-v3-turbo`) and
+  the local translation model (opus-mt-tl-en, from Hugging Face Hub)
 - `docs/style.css`
 
 ## Publishing

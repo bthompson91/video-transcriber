@@ -123,6 +123,8 @@
       const w = ensureWorker();
       if (payload && payload.audio) {
         w.postMessage({ id, type, model: $('model').value, audio: payload.audio }, [payload.audio.buffer]);
+      } else if (payload && typeof payload.text === 'string') {
+        w.postMessage({ id, type, model: $('model').value, text: payload.text });
       } else {
         w.postMessage({ id, type, model: $('model').value });
       }
@@ -636,9 +638,10 @@
           if (cancelled) return;
           setStatus('Translating row ' + (i + 1) + ' of ' + rows.length + '...', 70 + Math.round((i / rows.length) * 28));
           const row = rows[i];
-          const slice = audio.slice(Math.floor(row.start * 16000), Math.floor(row.end * 16000));
-          if (slice.length < 16000) continue;
-          const tr = await send('translate', { audio: slice });
+          // A local text model (opus-mt-tl-en, bundled in the repo),
+          // not Whisper: it translates the transcribed Tagalog text.
+          // The first use downloads the model (~133 MB, cached after).
+          const tr = await send('translate', { text: row.text });
           const english = (tr.text || '').trim();
           if (english && !sameText(row.text, english)) row.translation = english;
           renderRows();
