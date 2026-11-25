@@ -375,7 +375,7 @@
   function tableAsHtml() {
     const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
     const head = [
-      ['Story', $('fStory').value], ['Locale/District', $('fLocale').value],
+      ['Story', $('fStory').value], ['Local Congregation', $('fLocale').value],
       ['Date of event', $('fDate').value], ['Clip Numbers', $('fClip').value],
       ['File Format', $('fFormat').value], ['Segment', $('fSegment').value],
       ['Camera Op', $('fCameraOp').value], ['Camera Used', $('fCameraUsed').value],
@@ -388,9 +388,9 @@
       (r.isQuestion ? '<b>' + esc(r.text) + '</b>' : esc(r.text)) +
       (r.translation ? ' <i>[' + esc(r.translation) + ']</i>' : '') + '</td><td>' +
       esc(r.speakerOverride || speakerName(r)) + '</td></tr>').join('\n');
-    return '<!DOCTYPE html>\n<html><head><meta charset="utf-8"><title>Transcription SHEET - ' +
-      esc($('fClip').value) + '</title></head><body>\n<h1>Transcription SHEET</h1>\n<table>\n' + head +
-      '\n</table>\n<p><i>* For FTP uploads with no timecode, please list shots in order by CLIP NUMBER.</i></p>\n<table>\n<tr><th>CLIP NUMBER</th><th>Time Code</th><th>Transcription</th><th>INTERVIEW</th></tr>\n' +
+    return '<!DOCTYPE html>\n<html><head><meta charset="utf-8"><title>Transcription Sheet - ' +
+      esc($('fClip').value) + '</title></head><body>\n<h1>Transcription Sheet</h1>\n<table>\n' + head +
+      '\n</table>\n<table>\n<tr><th>CLIP NUMBER</th><th>Time Code</th><th>Transcription</th><th>INTERVIEW</th></tr>\n' +
       body + '\n</table>\n</body></html>\n';
   }
 
