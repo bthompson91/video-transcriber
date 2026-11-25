@@ -89,9 +89,13 @@
           // needs SharedArrayBuffer, which needs cross-origin
           // isolation headers that GitHub Pages does not send, so it
           // fails with "Can't find variable: SharedArrayBuffer".
-          // core-st runs without it, a bit slower.
+          // core-st runs without it, a bit slower. It also does not
+          // export proxy_main (the multi-thread entry point), only
+          // main, so mainName must be set or it fails with
+          // "Cannot call unknown function proxy_main".
           const ffmpeg = window.FFmpeg.createFFmpeg({
             corePath: 'https://unpkg.com/@ffmpeg/core-st@0.11.1/dist/ffmpeg-core.js',
+            mainName: 'main',
             log: false,
           });
           setStatus('Loading the file converter (one-time download)...', progressEl.value);
