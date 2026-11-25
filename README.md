@@ -36,8 +36,18 @@ out from the file:
 
 - Clip Numbers: the file name
 - File Format: the file extension
-- HD or SD: from the video resolution (1280 wide or 720 high = HD)
+- Codec: read from the MP4/MOV header where possible (H.264, H.265,
+  AV1...); .mts is H.264 / AVCHD
+- Frame rate: measured from the preview video (the browser exposes
+  no frame rate directly)
+- Bitrate: file size divided by duration
 - Date of event: the file's modified date, as a starting point
+
+There can be several interviewees in one file: list them comma
+separated in the header form, and pick the speaker on each row from
+its INTERVIEW dropdown. Questions default to the interviewer,
+answers default to the first interviewee. Whisper cannot tell
+interviewees apart, so the dropdown is the way to fix it.
 
 ## Files
 

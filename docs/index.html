@@ -48,7 +48,7 @@
   </section>
 
   <h2>Sheet details</h2>
-  <p class="muted">Top half is filled in by hand, except the fields the page can work out from the file: Clip Number is the file name, File Format is the file type, HD or SD comes from the video resolution.</p>
+  <p class="muted">Top half is filled in by hand, except the fields the page can work out from the file: Clip Number is the file name, File Format is the file type, Codec comes from the file itself where it can be read, Frame rate is measured from the video, and Bitrate is file size divided by duration.</p>
   <table class="header-form">
     <tbody>
       <tr><td><label>Story: <input id="fStory" type="text"></label></td>
@@ -62,9 +62,11 @@
       <tr><td><label>Crew Names &amp; E-mail<br><input id="fCrew" type="text"></label><br>
               <label>Interviewer: <input id="fInterviewer" type="text"></label><br>
               <label>PA/Sound: <input id="fPaSound" type="text"></label></td>
-          <td><label>HD or SD: <select id="fHdSd"><option value="">--</option><option>HD</option><option>SD</option></select></label><br>
-              <label>Interviewee: <input id="fInterviewee" type="text"></label><br>
-              <span class="muted">Questions are the interviewer, answers are the interviewee.</span></td></tr>
+          <td><label>Interviewees (comma separated): <input id="fInterviewees" type="text" placeholder="e.g. Angela Asencio, Maria Santos"></label><br>
+              <label>Codec: <input id="fCodec" type="text"></label><br>
+              <label>Frame rate: <input id="fFrameRate" type="text" placeholder="e.g. 25 fps"></label><br>
+              <label>Bitrate: <input id="fBitrate" type="text" placeholder="e.g. 12.4 Mbps"></label><br>
+              <span class="muted">Questions are the interviewer, answers are one of the interviewees. Pick the speaker on each row.</span></td></tr>
     </tbody>
   </table>
   <p class="note">* For FTP uploads with no timecode, please list shots in order by CLIP NUMBER.</p>

@@ -163,9 +163,29 @@
     return shared / Math.max(wa.length, wb.length) > 0.85;
   }
 
+  // Interviewees, comma separated in the header form. There can be
+  // several in one file, so answers are not pinned to one name.
+  function interviewees() {
+    return $('fInterviewees').value.split(',').map((s) => s.trim()).filter(Boolean);
+  }
+
+  function speakerOptions() {
+    const opts = [];
+    const interviewer = $('fInterviewer').value.trim();
+    opts.push(interviewer || 'Interviewer');
+    for (const name of interviewees()) opts.push(name);
+    if (!interviewees().length) opts.push('Interviewee');
+    return opts;
+  }
+
+  // Default speaker for a row: questions are the interviewer, answers
+  // are the first interviewee. Whisper cannot tell interviewees apart,
+  // so the per-row dropdown is how you fix it when they take turns.
   function speakerName(row) {
-    const name = row.speaker === 'interviewer' ? $('fInterviewer').value.trim() : $('fInterviewee').value.trim();
-    return name || (row.speaker === 'interviewer' ? 'Interviewer' : 'Interviewee');
+    if (row.speakerOverride) return row.speakerOverride;
+    if (row.speaker === 'interviewer') return $('fInterviewer').value.trim() || 'Interviewer';
+    const list = interviewees();
+    return list.length ? list[0] : 'Interviewee';
   }
 
   function renderRows() {
@@ -190,9 +210,23 @@
       }
       textTd.addEventListener('input', () => { row.text = textTd.childNodes[0] ? textTd.childNodes[0].textContent : textTd.textContent; });
       const whoTd = document.createElement('td');
-      whoTd.contentEditable = 'true';
-      whoTd.textContent = speakerName(row);
-      whoTd.addEventListener('input', () => { row.speakerOverride = whoTd.textContent; });
+      const select = document.createElement('select');
+      for (const name of speakerOptions()) {
+        const opt = document.createElement('option');
+        opt.value = name; opt.textContent = name;
+        select.appendChild(opt);
+      }
+      // Keep a previous pick even if the name is no longer in the
+      // header list (e.g. it was typed on the row itself).
+      const current = speakerName(row);
+      if (!speakerOptions().includes(current)) {
+        const opt = document.createElement('option');
+        opt.value = current; opt.textContent = current;
+        select.appendChild(opt);
+      }
+      select.value = current;
+      select.addEventListener('change', () => { row.speakerOverride = select.value; });
+      whoTd.appendChild(select);
       tr.appendChild(clipTd);
       tr.appendChild(timeTd);
       tr.appendChild(textTd);
@@ -214,8 +248,9 @@
       ['Date of event', $('fDate').value], ['Clip Numbers', $('fClip').value],
       ['File Format', $('fFormat').value], ['Segment', $('fSegment').value],
       ['Camera Op', $('fCameraOp').value], ['Camera Used', $('fCameraUsed').value],
-      ['Interviewer', $('fInterviewer').value], ['Interviewee', $('fInterviewee').value],
-      ['PA/Sound', $('fPaSound').value], ['HD or SD', $('fHdSd').value],
+      ['Interviewer', $('fInterviewer').value], ['Interviewees', $('fInterviewees').value],
+      ['PA/Sound', $('fPaSound').value], ['Codec', $('fCodec').value],
+      ['Frame rate', $('fFrameRate').value], ['Bitrate', $('fBitrate').value],
     ].map(([k, v]) => '<tr><td><b>' + esc(k) + ':</b></td><td>' + esc(v) + '</td></tr>').join('\n');
     const body = rows.map((r, i) =>
       '<tr><td>' + (i === 0 ? esc($('fClip').value) : '') + '</td><td>' + (r.isQuestion ? '' : formatTime(r.start)) + '</td><td>' +
@@ -236,23 +271,91 @@
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
 
+  // Read a video codec fourcc out of an MP4/MOV file (the stsd box),
+  // e.g. avc1 = H.264, hvc1 = H.265. Returns null when it cannot be
+  // read, so the field stays editable instead of guessing.
+  function parseMp4Codec(buf) {
+    const bytes = new Uint8Array(buf);
+    const text = new TextDecoder('latin1').decode(bytes);
+    const at = text.indexOf('stsd');
+    if (at < 0) return null;
+    const fourcc = text.slice(at + 4, at + 12).replace(/[^a-z0-9]/gi, '');
+    const map = { avc1: 'H.264 / AVC', avc3: 'H.264 / AVC', hvc1: 'H.265 / HEVC', hev1: 'H.265 / HEVC', av01: 'AV1', mp4v: 'MPEG-4', h264: 'H.264 / AVC' };
+    return map[fourcc] || null;
+  }
+
+  // Measure frame rate by counting presented frames against media
+  // time while the preview plays muted. The browser exposes no frame
+  // rate directly, so this is a short measurement, not a file header
+  // read. Returns null when it cannot be measured.
+  async function measureFrameRate(video) {
+    if (typeof video.requestVideoFrameCallback !== 'function') return null;
+    try {
+      video.muted = true;
+      video.playbackRate = 2;
+      await video.play();
+      const samples = await new Promise((resolve) => {
+        const got = [];
+        const timeout = setTimeout(() => resolve(got), 3000);
+        const cb = (now, meta) => {
+          got.push(meta);
+          if (got.length >= 2 && meta.mediaTime - got[0].mediaTime >= 1) {
+            clearTimeout(timeout);
+            resolve(got);
+          } else {
+            video.requestVideoFrameCallback(cb);
+          }
+        };
+        video.requestVideoFrameCallback(cb);
+      });
+      video.pause();
+      video.currentTime = 0;
+      if (samples.length < 2) return null;
+      const first = samples[0], last = samples[samples.length - 1];
+      const dt = last.mediaTime - first.mediaTime;
+      const df = last.presentedFrames - first.presentedFrames;
+      if (dt <= 0 || df <= 0) return null;
+      return df / dt;
+    } catch (e) {
+      try { video.pause(); } catch (err) { /* ignore */ }
+      return null;
+    }
+  }
+
   // Auto-fill what the file itself tells us: Clip Number is the file
-  // name, File Format is the extension, HD/SD comes from resolution.
-  function autoFillFromFile() {
+  // name, File Format is the extension, Codec from the file header
+  // where readable, Bitrate from file size / duration, Frame rate
+  // measured from the preview. All three stay editable.
+  async function autoFillFromFile() {
     if (!file) return;
     $('fClip').value = file.name;
-    const ext = file.name.includes('.') ? file.name.split('.').pop().toUpperCase() : '';
-    $('fFormat').value = ext;
+    const ext = file.name.includes('.') ? file.name.split('.').pop().toLowerCase() : '';
+    $('fFormat').value = ext.toUpperCase();
     const d = new Date(file.lastModified);
     if (!isNaN(d)) $('fDate').value = d.toLocaleDateString('en-AU', { day: 'numeric', month: 'long', year: 'numeric' }).toUpperCase();
     const preview = $('preview');
-    preview.addEventListener('loadedmetadata', () => {
+    preview.addEventListener('loadedmetadata', async () => {
       const w = preview.videoWidth, h = preview.videoHeight;
       const dur = preview.duration;
-      $('fileMeta').textContent = (w && h ? w + 'x' + h + ' - ' : '') +
-        (isFinite(dur) ? Math.round(dur) + 's - ' : '') +
-        (w >= 1280 || h >= 720 ? 'HD' : (w ? 'SD' : ''));
-      if (w) $('fHdSd').value = (w >= 1280 || h >= 720) ? 'HD' : 'SD';
+      let meta = (w && h ? w + 'x' + h + ' - ' : '') + (isFinite(dur) ? Math.round(dur) + 's' : '');
+      $('fileMeta').textContent = meta;
+      if (isFinite(dur) && dur > 0) {
+        $('fBitrate').value = ((file.size * 8) / dur / 1000000).toFixed(1) + ' Mbps';
+      }
+      if (ext === 'mts' || ext === 'm2ts') {
+        // AVCHD transport stream; the browser cannot read its codec
+        // header, and H.264 is the standard codec for it.
+        $('fCodec').value = 'H.264 / AVCHD';
+      } else if (ext === 'mp4' || ext === 'mov' || ext === 'm4v') {
+        try {
+          const head = await file.slice(0, 1024 * 1024).arrayBuffer();
+          $('fCodec').value = parseMp4Codec(head) || '';
+        } catch (e) { /* leave editable */ }
+      } else if (ext === 'webm') {
+        $('fCodec').value = 'WebM (VP8 / VP9 / AV1)';
+      }
+      const fps = await measureFrameRate(preview);
+      if (fps) $('fFrameRate').value = fps.toFixed(2).replace(/\.?0+$/, '') + ' fps';
     }, { once: true });
   }
 
@@ -340,6 +443,6 @@
   });
   $('printBtn').addEventListener('click', () => window.print());
   $('fInterviewer').addEventListener('input', renderRows);
-  $('fInterviewee').addEventListener('input', renderRows);
+  $('fInterviewees').addEventListener('input', renderRows);
   $('fClip').addEventListener('input', renderRows);
 })();
