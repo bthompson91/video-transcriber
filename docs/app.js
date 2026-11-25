@@ -71,14 +71,71 @@
     return String(h).padStart(2, '0') + ':' + String(m).padStart(2, '0') + ':' + String(sec).padStart(2, '0');
   }
 
-  async function extractAudio(file) {
-    const buf = await file.arrayBuffer();
-    const ctx = new (window.AudioContext || window.webkitAudioContext)();
-    let decoded;
+  // Fallback for files the browser itself cannot decode. iOS Safari
+  // cannot decode .mts / .m2ts (AVCHD) at all, and some camera
+  // formats fail the same way. ffmpeg.wasm converts the file to a
+  // 16 kHz mono WAV in the browser (one-time ~30 MB core download,
+  // cached afterwards), which the browser can always decode. The
+  // file never leaves the device.
+  let ffmpegPromise = null;
+  function loadFfmpeg() {
+    if (ffmpegPromise) return ffmpegPromise;
+    ffmpegPromise = new Promise((resolve, reject) => {
+      const script = document.createElement('script');
+      script.src = 'https://unpkg.com/@ffmpeg/ffmpeg@0.11.6/dist/ffmpeg.min.js';
+      script.onload = async () => {
+        try {
+          const ffmpeg = window.FFmpeg.createFFmpeg({
+            corePath: 'https://unpkg.com/@ffmpeg/core@0.11.0/dist/ffmpeg-core.js',
+            log: false,
+          });
+          setStatus('Loading the file converter (one-time download)...', progressEl.value);
+          await ffmpeg.load();
+          resolve(ffmpeg);
+        } catch (e) { reject(e); }
+      };
+      script.onerror = () => reject(new Error('Could not load the file converter.'));
+      document.head.appendChild(script);
+    });
+    return ffmpegPromise;
+  }
+
+  async function extractAudioViaFfmpeg(file) {
+    const ffmpeg = await loadFfmpeg();
+    const ext = file.name.includes('.') ? file.name.split('.').pop().toLowerCase() : 'mp4';
+    const inName = 'input.' + ext.replace(/[^a-z0-9]/g, '');
+    setStatus('Converting the file so it can be read...', progressEl.value);
+    detailEl.textContent = 'This can take a minute on a phone for a long file.';
+    ffmpeg.FS('writeFile', inName, new Uint8Array(await file.arrayBuffer()));
     try {
-      decoded = await ctx.decodeAudioData(buf);
+      await ffmpeg.run('-i', inName, '-vn', '-ac', '1', '-ar', '16000', '-f', 'wav', 'out.wav');
+      const wav = ffmpeg.FS('readFile', 'out.wav');
+      return wav.buffer.slice(wav.byteOffset, wav.byteOffset + wav.byteLength);
+    } finally {
+      try { ffmpeg.FS('unlink', inName); } catch (e) { /* ignore */ }
+      try { ffmpeg.FS('unlink', 'out.wav'); } catch (e) { /* ignore */ }
+    }
+  }
+
+  async function decodeBuffer(buf) {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    try {
+      return await ctx.decodeAudioData(buf);
     } finally {
       try { await ctx.close(); } catch (e) { /* ignore */ }
+    }
+  }
+
+  async function extractAudio(file) {
+    let decoded;
+    try {
+      decoded = await decodeBuffer(await file.arrayBuffer());
+    } catch (e) {
+      // The browser could not decode this file (on a phone this is
+      // usually .mts or another camera format). Convert it first.
+      setStatus('Your browser could not read this file directly, converting it...', progressEl.value);
+      const wavBuf = await extractAudioViaFfmpeg(file);
+      decoded = await decodeBuffer(wavBuf);
     }
     const len = decoded.length;
     const mono = new Float32Array(len);
