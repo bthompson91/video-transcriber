@@ -94,8 +94,14 @@ Two download options, both named after the video file:
 - SRT (.srt): one subtitle per row, timed from when its speech
   starts to when it ends, with a translation on a second line
   when there is one.
+- English subtitles (.en.srt): the translations only, one subtitle
+  per translated row, plain English text with no brackets - use it
+  as the English subtitle track for the video. Rows with no
+  translation are skipped. Edited translations come through here
+  too.
 
-`IMG_3436.MOV` downloads as `IMG_3436.docx` and `IMG_3436.srt`.
+`IMG_3436.MOV` downloads as `IMG_3436.docx`, `IMG_3436.srt`, and
+`IMG_3436.en.srt` for the translation subtitles.
 
 ## Header form
 

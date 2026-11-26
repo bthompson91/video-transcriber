@@ -414,6 +414,10 @@
       tbody.appendChild(tr);
     });
     resultBox.hidden = rows.length === 0;
+    // The English-subtitles download only makes sense once at
+    // least one row has a translation, so it stays greyed out
+    // until then.
+    $('downloadTranslationSrt').disabled = !rows.some((r) => r.translation);
   }
 
   // Downloads take the video's own file name, just a different
@@ -449,6 +453,19 @@
       let text = r.text;
       if (r.translation) text += '\n[' + r.translation + ']';
       return (i + 1) + '\n' + start + ' --> ' + end + '\n' + text;
+    }).join('\n\n') + '\n';
+  }
+
+  // Translation-only SRT, for use as English subtitles: one
+  // subtitle per translated row, plain English text, no brackets.
+  // Rows with no translation are skipped, and numbering runs over
+  // the subtitles that are actually in the file. It is built from
+  // the rows, so edited translations come through here too.
+  function rowsToTranslationSrt() {
+    return rows.filter((r) => r.translation).map((r, i) => {
+      const start = srtTime(r.start);
+      const end = srtTime(Math.max(r.end, r.start + 0.5));
+      return (i + 1) + '\n' + start + ' --> ' + end + '\n' + r.translation.trim();
     }).join('\n\n') + '\n';
   }
 
@@ -710,6 +727,16 @@
   $('downloadSrt').addEventListener('click', () => {
     if (!rows.length) return;
     download(baseName() + '.srt', rowsToSrt(), 'text/plain');
+  });
+  // Translation-only subtitles, named <video>.en.srt so players
+  // pick it up as the English subtitle track next to the video.
+  $('downloadTranslationSrt').addEventListener('click', () => {
+    if (!rows.length) return;
+    if (!rows.some((r) => r.translation)) {
+      setStatus('No translations yet. Tick Translate before transcribing.', progressEl.value);
+      return;
+    }
+    download(baseName() + '.en.srt', rowsToTranslationSrt(), 'text/plain');
   });
   $('fInterviewer').addEventListener('input', renderRows);
   $('fInterviewees').addEventListener('input', renderRows);
