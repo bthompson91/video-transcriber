@@ -54,6 +54,14 @@ default and the model only downloads when you tick the box, cached
 afterwards. English rows get no bracket, because the model returns
 the same English.
 
+Every Transcription cell is editable on the page: click the text
+or the translation in brackets and type, or pick a different
+speaker from the INTERVIEW dropdown. Edits write straight back
+to the row, and the Word and SRT downloads are built from the
+rows, so the downloaded files are the edited version. Clearing
+the bracket translation removes it from the downloads for that
+row.
+
 The first pass transcribes only: it is told the language is
 Tagalog (`tl`), so Tagalog speech comes out as Tagalog text.
 transformers.js defaults the language to English when none is

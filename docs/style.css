@@ -74,7 +74,8 @@ thead th { text-align: center; background: var(--thead-bg); }
 #transcript td.question { font-weight: 700; }
 #transcript td.time { cursor: pointer; color: var(--link); text-decoration: underline; }
 td .translation { font-style: italic; font-weight: 400; }
-td[contenteditable]:focus { outline: 2px solid var(--link); }
+.editable { cursor: text; }
+.editable:focus { outline: 2px solid var(--link); }
 .header-form td { border: 1px solid var(--table-border); }
 @media print {
   .controls, #statusBox, .actions, #videoBox { display: none; }

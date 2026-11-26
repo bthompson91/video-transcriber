@@ -8,7 +8,10 @@
 // to gather their thoughts (a pause between Whisper chunks), or when
 // a row reaches the chosen interval (10 or 30 seconds).
 // Tagalog rows get an English translation in brackets, italic, after
-// the original text.
+// the original text. The Transcription text and the bracket
+// translation are both editable on the page, and the downloads are
+// built from the rows, so the downloaded Word and SRT files are the
+// edited version.
 (() => {
   const $ = (id) => document.getElementById(id);
   const fileInput = $('file'), startBtn = $('start'), cancelBtn = $('cancel');
@@ -135,6 +138,21 @@
     const s = Math.max(0, Math.floor(seconds || 0));
     const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), sec = s % 60;
     return String(h).padStart(2, '0') + ':' + String(m).padStart(2, '0') + ':' + String(sec).padStart(2, '0');
+  }
+
+  // Paste as plain text, newlines as spaces: pasting formatted HTML
+  // into a row would smuggle markup into the Word and SRT downloads.
+  function pastePlain(e) {
+    e.preventDefault();
+    const data = e.clipboardData || window.clipboardData;
+    const text = data ? data.getData('text/plain').replace(/\s*\n\s*/g, ' ') : '';
+    document.execCommand('insertText', false, text);
+  }
+
+  // Enter commits the edit instead of adding a line break inside
+  // the cell, which would end up as a stray newline in the downloads.
+  function commitOnEnter(e) {
+    if (e.key === 'Enter') { e.preventDefault(); e.currentTarget.blur(); }
   }
 
   // Fallback for files the browser itself cannot decode. iOS Safari
@@ -338,17 +356,39 @@
         preview.play().catch(() => { /* the seek still lands even if play is blocked */ });
       });
       const textTd = document.createElement('td');
-      textTd.contentEditable = 'true';
       if (row.isQuestion) textTd.classList.add('question');
-      textTd.appendChild(document.createTextNode(row.text));
+      // The transcription and its bracket translation are separate
+      // editable pieces, each writing straight back to the row on
+      // every keystroke, so the Word and SRT downloads - which are
+      // built from the rows - always get the edited version.
+      // The old code made the whole cell one editable blob and only
+      // read back its first child node, so edits to the translation
+      // in brackets were silently lost on the next re-render and
+      // never reached a download.
+      const textSpan = document.createElement('span');
+      textSpan.contentEditable = 'true';
+      textSpan.className = 'editable';
+      textSpan.textContent = row.text;
+      textSpan.addEventListener('input', () => { row.text = textSpan.textContent; });
+      textSpan.addEventListener('keydown', commitOnEnter);
+      textSpan.addEventListener('paste', pastePlain);
+      textTd.appendChild(textSpan);
       if (row.translation) {
         textTd.appendChild(document.createTextNode(' '));
         const em = document.createElement('em');
-        em.className = 'translation';
+        em.className = 'translation editable';
+        em.contentEditable = 'true';
         em.textContent = '[' + row.translation + ']';
+        em.addEventListener('input', () => {
+          // The brackets are decoration: store the text inside them.
+          // Clearing the bracket text removes the translation, so
+          // the downloads stop showing one for this row.
+          row.translation = em.textContent.replace(/^\s*\[/, '').replace(/\]\s*$/, '').trim();
+        });
+        em.addEventListener('keydown', commitOnEnter);
+        em.addEventListener('paste', pastePlain);
         textTd.appendChild(em);
       }
-      textTd.addEventListener('input', () => { row.text = textTd.childNodes[0] ? textTd.childNodes[0].textContent : textTd.textContent; });
       const whoTd = document.createElement('td');
       const select = document.createElement('select');
       for (const name of speakerOptions()) {
