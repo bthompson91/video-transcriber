@@ -43,12 +43,13 @@ row only.
 
 If the text is in Tagalog and the Translate box is ticked, an
 English translation is added after it in brackets and italic,
-using a local text model, not Whisper: Helsinki-NLP's opus-mt-tl-en
-(Tagalog to English), converted to ONNX and int8 quantized, hosted
-on Hugging Face Hub as brendo91/opus-mt-tl-en-onnx (~133 MB). It
-translates the transcribed text, so it cannot loop the way
-Whisper's translate pass did (that pass once filled a bracket with
-"I think" repeated hundreds of times). Translation is off by
+using a local text model, not Whisper: Meta's NLLB-200 distilled
+600M (Xenova/nllb-200-distilled-600M, ONNX int8 quantized,
+~900 MB), loaded from Hugging Face Hub. It translates the
+transcribed text, so it cannot loop the way Whisper's translate
+pass did (that pass once filled a bracket with "I think" repeated
+hundreds of times). NLLB replaced the smaller opus-mt-tl-en model,
+which mangled Taglish and English loanwords. Translation is off by
 default and the model only downloads when you tick the box, cached
 afterwards. English rows get no bracket, because the model returns
 the same English.
@@ -117,14 +118,15 @@ Tiny and Base are not offered: in testing they hallucinate and
 produce poor transcripts. English-only `.en` models are not
 offered: they cannot do Tagalog.
 
-Translation uses a separate local text model: Helsinki-NLP
-opus-mt-tl-en (Tagalog to English), converted to ONNX and int8
-quantized (encoder + merged decoder, ~133 MB total), hosted on
-Hugging Face Hub as brendo91/opus-mt-tl-en-onnx. There is no
-ready-made ONNX version of it, so it was exported with optimum
-and quantized by hand; the decoder must be the merged KV-cache
-variant or generation loops. It loads from the Hub, like the
-Whisper models, only when the Translate box is ticked.
+Translation uses a separate local text model: Meta's NLLB-200
+distilled 600M (Xenova/nllb-200-distilled-600M, ONNX int8
+quantized, encoder ~419 MB + merged decoder ~475 MB, ~900 MB
+total). It loads from Hugging Face Hub, like the Whisper models,
+only when the Translate box is ticked. The q4 files are not used:
+they are ~2.3 GB total, bigger than int8, because NLLB's huge
+256k-vocab embedding matrix barely quantizes. Translation runs on
+WASM, not WebGPU, because WebGPU translation crashes in
+transformers.js.
 
 ## Files
 
@@ -132,7 +134,8 @@ Whisper models, only when the Translate box is ticked.
 - `docs/app.js` - audio extraction, row grouping, translation, export
 - `docs/worker.js` - Whisper in a Web Worker (transformers.js,
   `onnx-community/whisper-small` or `whisper-large-v3-turbo`) and
-  the local translation model (opus-mt-tl-en, from Hugging Face Hub)
+  the local translation model (NLLB-200 distilled 600M, from
+  Hugging Face Hub)
 - `docs/style.css`
 
 ## Publishing

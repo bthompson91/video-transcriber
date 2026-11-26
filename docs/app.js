@@ -638,9 +638,9 @@
           if (cancelled) return;
           setStatus('Translating row ' + (i + 1) + ' of ' + rows.length + '...', 70 + Math.round((i / rows.length) * 28));
           const row = rows[i];
-          // A local text model (opus-mt-tl-en, bundled in the repo),
-          // not Whisper: it translates the transcribed Tagalog text.
-          // The first use downloads the model (~133 MB, cached after).
+          // A local text model (NLLB-200 distilled 600M), not
+          // Whisper: it translates the transcribed Tagalog text.
+          // The first use downloads the model (~900 MB, cached after).
           const tr = await send('translate', { text: row.text });
           const english = (tr.text || '').trim();
           if (english && !sameText(row.text, english)) row.translation = english;

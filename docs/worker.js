@@ -7,12 +7,14 @@
 // device offers it, WASM otherwise. Audio arrives as a Float32Array of
 // 16 kHz mono samples.
 //
-// Translation is a separate local text model, not Whisper: the
-// bundled opus-mt-tl-en (Helsinki-NLP, Tagalog to English, ONNX,
-// int8 quantized, ~133 MB) on Hugging Face Hub as
-// brendo91/opus-mt-tl-en-onnx. It takes the transcribed Tagalog
-// text and translates it, so it cannot loop the way Whisper's
-// translate pass did.
+// Translation is a separate local text model, not Whisper: Meta's
+// NLLB-200 distilled 600M (Xenova/nllb-200-distilled-600M, ONNX,
+// int8 quantized, ~895 MB), loaded from Hugging Face Hub. It takes
+// the transcribed Tagalog text and translates it, so it cannot loop
+// the way Whisper's translate pass did. It replaced the smaller
+// opus-mt-tl-en model, which mangled Taglish and English loanwords
+// ("You're a guy.", "birthday boy"). NLLB handles code-switched
+// spoken Tagalog correctly.
 //
 // Messages in:
 //   { id, type: 'load', model }
@@ -65,22 +67,27 @@ async function getTranscriber(model, onProgress) {
 }
 
 // The translation model lives on Hugging Face Hub
-// (brendo91/opus-mt-tl-en-onnx), loaded by repo id like the Whisper
-// models. dtype 'q8' loads the int8 quantized ONNX files (the
-// compressed versions). Loaded lazily, only when translation is
-// turned on, so the ~133 MB download only happens if the user asks
-// for it.
+// (Xenova/nllb-200-distilled-600M), loaded by repo id like the
+// Whisper models. dtype 'q8' loads the int8 quantized ONNX files
+// (encoder ~419 MB + merged decoder ~475 MB, ~895 MB total - the
+// q4 files are actually bigger, ~2.3 GB, because NLLB's huge
+// embedding matrix barely quantizes). Loaded lazily, only when
+// translation is turned on, so the download only happens if the
+// user asks for it. Forced to WASM, not WebGPU: WebGPU translation
+// crashes in transformers.js (issues #1380, #1518).
 async function getTranslator(onProgress) {
   if (!translatorPromise) {
     translatorPromise = (async () => {
-      const device = await pickDevice();
-      return pipeline('translation', 'brendo91/opus-mt-tl-en-onnx', {
-        device,
+      // WASM, not WebGPU: WebGPU translation crashes in
+      // transformers.js, and NLLB is a 600M encoder-decoder, so
+      // this runs on CPU/WASM by design.
+      return pipeline('translation', 'Xenova/nllb-200-distilled-600M', {
+        device: 'wasm',
         dtype: 'q8',
         progress_callback: (p) => {
           if (!onProgress) return;
           if (p && p.status === 'progress' && typeof p.progress === 'number') {
-            onProgress('Downloading the translation model... ' + Math.round(p.progress) + '%');
+            onProgress('Downloading the translation model (~900 MB, one-time)... ' + Math.round(p.progress) + '%');
           } else if (p && p.status === 'done') {
             onProgress('Translation model downloaded.');
           } else if (p && p.status === 'initiate') {
@@ -120,11 +127,13 @@ self.onmessage = async (event) => {
       self.postMessage({ id, ok: true, text: (out && out.text) || '', chunks: (out && out.chunks) || [] });
     } else if (msg.type === 'translate') {
       const translator = await getTranslator((text) => self.postMessage({ id, progress: text }));
-      // A text model, not Whisper: it takes the transcribed Tagalog
-      // text and translates it to English. No audio, so it cannot
-      // loop the way Whisper's translate pass did. The translation
-      // pipeline returns [{ translation_text: '...' }].
-      const out = await translator(msg.text || '');
+      // A text model, not Whisper: NLLB-200 translates the
+      // transcribed Tagalog text to English. No audio, so it cannot
+      // loop the way Whisper's translate pass did. NLLB needs the
+      // source and target languages on every call: Tagalog is
+      // 'tgl_Latn', English is 'eng_Latn'. The translation pipeline
+      // returns [{ translation_text: '...' }].
+      const out = await translator(msg.text || '', { src_lang: 'tgl_Latn', tgt_lang: 'eng_Latn' });
       let text = '';
       if (Array.isArray(out) && out[0]) {
         text = out[0].translation_text || out[0].text || '';
