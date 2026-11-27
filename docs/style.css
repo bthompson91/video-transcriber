@@ -63,6 +63,10 @@ button:disabled { opacity: .45; cursor: default; }
 progress { width: 100%; margin-top: 8px; }
 #statusBox { background: var(--surface); padding: 12px 16px; border-radius: 12px; margin: 12px 0; }
 video { width: 100%; border-radius: 12px; margin: 12px 0; }
+#cleanedPlayer { display: none; }
+#audioSwitch { display: flex; gap: 6px; align-items: center; margin: -4px 0 12px; }
+#audioSwitch .toggle { background: var(--action-bg); color: var(--action-text); padding: 4px 12px; }
+#audioSwitch .toggle.on { background: var(--link); border-color: var(--link); color: #fff; }
 .actions { display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; }
 .actions button { background: var(--action-bg); color: var(--action-text); }
 table { width: 100%; border-collapse: collapse; background: var(--surface); }

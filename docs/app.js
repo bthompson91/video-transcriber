@@ -337,6 +337,71 @@
     const out = await send('clean', { audio: mono48k.slice() });
     return peakNormalise(out.audio, 0.89125, 10);
   }
+
+  // Preview audio: once cleaned audio exists, the video preview
+  // plays it by default (the video element itself is muted, as it
+  // always was), with a Cleaned / Original switch under the video
+  // to compare the two mid-playback without losing your place.
+  // The video drives the audio: play, pause and seek on the video
+  // carry the cleaned track along, and a timer nudges the audio
+  // back if the two drift apart over a long clip. With no cleaned
+  // audio the preview stays muted, as it always was.
+  let previewAudio = 'original'; // 'cleaned' when the cleaned track is the preview source
+  let cleanedUrl = null;
+  let syncTimer = null;
+  let measuringFps = false;
+
+  function setPreviewAudio(which) {
+    const preview = $('preview');
+    const player = $('cleanedPlayer');
+    previewAudio = which;
+    $('audioCleaned').classList.toggle('on', which === 'cleaned');
+    $('audioOriginal').classList.toggle('on', which === 'original');
+    if (which === 'cleaned' && cleanedAudio) {
+      preview.muted = true;
+      player.currentTime = preview.currentTime;
+      if (!preview.paused) {
+        player.play().catch(() => setPreviewAudio('original'));
+        startSync();
+      }
+    } else {
+      player.pause();
+      stopSync();
+      // Original means the video's own soundtrack, unmuted. No
+      // cleaned audio at all means the preview stays muted.
+      preview.muted = !(which === 'original' && cleanedAudio);
+    }
+  }
+
+  function startSync() {
+    stopSync();
+    syncTimer = setInterval(() => {
+      const preview = $('preview');
+      const player = $('cleanedPlayer');
+      if (preview.paused || previewAudio !== 'cleaned' || !cleanedAudio) { stopSync(); return; }
+      if (Math.abs(player.currentTime - preview.currentTime) > 0.15) {
+        player.currentTime = preview.currentTime;
+      }
+    }, 500);
+  }
+  function stopSync() {
+    if (syncTimer !== null) { clearInterval(syncTimer); syncTimer = null; }
+  }
+
+  function resetCleanedPreview() {
+    stopSync();
+    previewAudio = 'original';
+    cleanedAudio = null;
+    const player = $('cleanedPlayer');
+    player.pause();
+    player.removeAttribute('src');
+    player.load();
+    if (cleanedUrl) { URL.revokeObjectURL(cleanedUrl); cleanedUrl = null; }
+    $('preview').muted = true;
+    $('audioSwitch').hidden = true;
+    $('audioCleaned').classList.toggle('on', false);
+    $('audioOriginal').classList.toggle('on', true);
+  }
   function splitSentences(text) {
     return (text || '').split(/(?<=[.?!])\s+/).map((s) => s.trim()).filter(Boolean);
   }
@@ -649,6 +714,10 @@
   // read. Returns null when it cannot be measured.
   async function measureFrameRate(video) {
     if (typeof video.requestVideoFrameCallback !== 'function') return null;
+    // The measurement plays the video, which would otherwise start
+    // the cleaned preview track. Guard it so the audio stays still.
+    measuringFps = true;
+    try {
     try {
       video.muted = true;
       video.playbackRate = 2;
@@ -682,6 +751,9 @@
       try { video.pause(); } catch (err) { /* ignore */ }
       try { video.playbackRate = 1; } catch (err) { /* ignore */ }
       return null;
+    }
+    } finally {
+      measuringFps = false;
     }
   }
 
@@ -727,6 +799,7 @@
 
   function pickFile(f, restored) {
     file = f;
+    resetCleanedPreview();
     $('fileName').textContent = file ? file.name + ' (' + (file.size / 1048576).toFixed(1) + ' MB)' : '';
     $('fileMeta').textContent = restored ? 'Restored after a reload.' : '';
     startBtn.disabled = !file;
@@ -757,7 +830,7 @@
     if (!file) return;
     cancelled = false;
     rows = [];
-    cleanedAudio = null;
+    resetCleanedPreview();
     $('downloadCleaned').disabled = true;
     renderRows();
     startBtn.disabled = true;
@@ -808,6 +881,14 @@
         cleanedAudio = await cleanAudio(extracted.mono48k);
         if (cancelled) return;
         $('downloadCleaned').disabled = false;
+        // The cleaned track becomes the preview audio by default,
+        // with the switch under the video to compare it against
+        // the original mid-playback.
+        if (cleanedUrl) URL.revokeObjectURL(cleanedUrl);
+        cleanedUrl = URL.createObjectURL(encodeWav(cleanedAudio, 48000));
+        $('cleanedPlayer').src = cleanedUrl;
+        $('audioSwitch').hidden = false;
+        setPreviewAudio('cleaned');
         setStatus('Done. ' + rows.length + ' rows, cleaned audio ready.', 100);
         detailEl.textContent = 'Times are HH:MM:SS on every row.';
       }
@@ -827,6 +908,33 @@
     startBtn.disabled = !file;
     cancelBtn.disabled = true;
   });
+
+  // The preview video drives the cleaned audio track: play, pause
+  // and seek on the video carry it along. The frame-rate
+  // measurement also plays the video, so it is guarded out.
+  $('preview').addEventListener('play', () => {
+    if (previewAudio !== 'cleaned' || !cleanedAudio || measuringFps) return;
+    const player = $('cleanedPlayer');
+    player.currentTime = $('preview').currentTime;
+    player.play().catch(() => setPreviewAudio('original'));
+    startSync();
+  });
+  $('preview').addEventListener('pause', () => {
+    $('cleanedPlayer').pause();
+    stopSync();
+  });
+  $('preview').addEventListener('seeked', () => {
+    if (previewAudio !== 'cleaned' || !cleanedAudio) return;
+    const player = $('cleanedPlayer');
+    player.currentTime = $('preview').currentTime;
+    if (!$('preview').paused) player.play().catch(() => {});
+  });
+  $('preview').addEventListener('ended', () => {
+    $('cleanedPlayer').pause();
+    stopSync();
+  });
+  $('audioCleaned').addEventListener('click', () => setPreviewAudio('cleaned'));
+  $('audioOriginal').addEventListener('click', () => setPreviewAudio('original'));
 
   $('downloadDocx').addEventListener('click', downloadDocx);
   $('downloadSrt').addEventListener('click', () => {

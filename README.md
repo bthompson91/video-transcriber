@@ -131,6 +131,18 @@ browser, on your device, and only downloads when the box is
 ticked. A 15 s clip cleans in a few seconds; a 10 min file takes
 a few minutes.
 
+Once a cleanup run has produced cleaned audio, the video preview
+plays it by default: the video element itself stays muted (as it
+always was) and the cleaned track plays alongside it, kept in
+step with play, pause and seeking, with a timer nudging it back
+if the two drift apart. A Cleaned / Original switch under the
+video compares the two mid-playback without losing your place -
+Original unmutes the video's own soundtrack, Cleaned goes back
+to the cleaned track at the same timestamp. The switch only
+appears once cleaned audio exists; before that the preview is
+silent, as before. If the cleaned track ever fails to start, the
+preview falls back to the original audio.
+
 ## Header form
 
 The top half is filled in by hand, except what the page can work

@@ -52,6 +52,12 @@
 
       <section id="videoBox" hidden>
         <video id="preview" controls playsinline muted></video>
+        <audio id="cleanedPlayer" preload="auto"></audio>
+        <div id="audioSwitch" hidden>
+          <span class="muted">Preview audio:</span>
+          <button id="audioCleaned" type="button" class="toggle on">Cleaned</button>
+          <button id="audioOriginal" type="button" class="toggle">Original</button>
+        </div>
       </section>
 
       <h2>Sheet details</h2>
