@@ -65,6 +65,7 @@ progress { width: 100%; margin-top: 8px; }
 video { width: 100%; border-radius: 12px; margin: 12px 0; }
 #cleanedPlayer { display: none; }
 #audioSwitch { display: flex; gap: 6px; align-items: center; margin: -4px 0 12px; }
+#audioSwitch[hidden] { display: none; }
 #audioSwitch .toggle { background: var(--action-bg); color: var(--action-text); padding: 4px 12px; }
 #audioSwitch .toggle.on { background: var(--link); border-color: var(--link); color: #fff; }
 .actions { display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; }
