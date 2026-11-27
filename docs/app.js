@@ -158,7 +158,7 @@
   // Fallback for files the browser itself cannot decode. iOS Safari
   // cannot decode .mts / .m2ts (AVCHD) at all, and some camera
   // formats fail the same way. ffmpeg.wasm converts the file to a
-  // 16 kHz mono WAV in the browser (one-time ~30 MB core download,
+  // 48 kHz mono WAV in the browser (one-time ~30 MB core download,
   // cached afterwards), which the browser can always decode. The
   // file never leaves the device.
   let ffmpegPromise = null;
@@ -201,7 +201,7 @@
     detailEl.textContent = 'This can take a minute on a phone for a long file.';
     ffmpeg.FS('writeFile', inName, new Uint8Array(await file.arrayBuffer()));
     try {
-      await ffmpeg.run('-i', inName, '-vn', '-ac', '1', '-ar', '16000', '-f', 'wav', 'out.wav');
+      await ffmpeg.run('-i', inName, '-vn', '-ac', '1', '-ar', '48000', '-f', 'wav', 'out.wav');
       const wav = ffmpeg.FS('readFile', 'out.wav');
       return wav.buffer.slice(wav.byteOffset, wav.byteOffset + wav.byteLength);
     } finally {
@@ -236,9 +236,20 @@
       const data = decoded.getChannelData(c);
       for (let i = 0; i < len; i++) mono[i] += data[i] / decoded.numberOfChannels;
     }
-    if (decoded.sampleRate === 16000) return mono;
-    const ratio = decoded.sampleRate / 16000;
-    const outLen = Math.floor(len / ratio);
+    // Full-rate mono for the DeepFilterNet cleanup (48 kHz native),
+    // from which the 16 kHz Whisper feed is derived. Same length as
+    // the video audio, so the cleaned WAV stays in sync with it.
+    const mono48k = resampleLinear(mono, decoded.sampleRate, 48000);
+    return { mono48k, seconds: mono48k.length / 48000 };
+  }
+
+  // Resample mono audio by linear interpolation. Used both ways:
+  // full-rate audio down to 16 kHz for Whisper, and any decoded
+  // rate up to 48 kHz for the DeepFilterNet cleanup.
+  function resampleLinear(mono, fromRate, toRate) {
+    if (fromRate === toRate) return mono;
+    const ratio = fromRate / toRate;
+    const outLen = Math.floor(mono.length / ratio);
     const out = new Float32Array(outLen);
     for (let i = 0; i < outLen; i++) {
       const pos = i * ratio;
@@ -249,7 +260,83 @@
     return out;
   }
 
-  // Split a chunk's text into sentences. A question sentence ends in ?.
+  // High-pass filter (2nd-order Butterworth, 80 Hz) for the audio
+  // Whisper hears. Speech energy starts around 85 Hz, so everything
+  // below 80 Hz is rumble - HVAC, traffic, handling noise. Removing
+  // it costs nothing.
+  function highPass80(samples, sampleRate) {
+    const q = 1 / Math.SQRT2;
+    const w0 = 2 * Math.PI * 80 / sampleRate;
+    const cos = Math.cos(w0), alpha = Math.sin(w0) / (2 * q);
+    const b0 = (1 + cos) / 2, b1 = -(1 + cos), b2 = (1 + cos) / 2;
+    const a0 = 1 + alpha, a1 = -2 * cos, a2 = 1 - alpha;
+    const out = new Float32Array(samples.length);
+    let x1 = 0, x2 = 0, y1 = 0, y2 = 0;
+    for (let i = 0; i < samples.length; i++) {
+      const x0 = samples[i];
+      const y0 = (b0 * x0 + b1 * x1 + b2 * x2 - a1 * y1 - a2 * y2) / a0;
+      out[i] = y0;
+      x2 = x1; x1 = x0; y2 = y1; y1 = y0;
+    }
+    return out;
+  }
+
+  // Peak normalisation: bring the loudest sample to -1 dBFS, with
+  // the boost capped at +20 dB so near-silent audio does not get
+  // its noise floor amplified absurdly. Quiet or distant speech
+  // comes up to a consistent level, which is the preprocessing step
+  // that reliably helps transcription.
+  function peakNormalise(samples, target, maxGain) {
+    let peak = 0;
+    for (let i = 0; i < samples.length; i++) {
+      const a = Math.abs(samples[i]);
+      if (a > peak) peak = a;
+    }
+    if (peak <= 0) return samples;
+    const gain = Math.min(target / peak, maxGain);
+    if (gain === 1) return samples;
+    const out = new Float32Array(samples.length);
+    for (let i = 0; i < samples.length; i++) out[i] = samples[i] * gain;
+    return out;
+  }
+
+  // The feed Whisper hears: 16 kHz mono, high-passed at 80 Hz and
+  // peak-normalised. Denoising is deliberately NOT on this path:
+  // enhancement before Whisper usually makes transcription worse,
+  // so the cleaned audio is a separate download instead.
+  function prepareForTranscription(mono48k) {
+    const mono16k = resampleLinear(mono48k, 48000, 16000);
+    return peakNormalise(highPass80(mono16k, 16000), 0.89125, 10);
+  }
+
+  // 16-bit PCM WAV, mono. The cleaned audio is written at 48 kHz
+  // and exactly the same length as the source, so it lines up with
+  // the video when laid back under it.
+  function encodeWav(mono, sampleRate) {
+    const n = mono.length;
+    const buf = new ArrayBuffer(44 + n * 2);
+    const v = new DataView(buf);
+    const writeStr = (off, s) => { for (let i = 0; i < s.length; i++) v.setUint8(off + i, s.charCodeAt(i)); };
+    writeStr(0, 'RIFF'); v.setUint32(4, 36 + n * 2, true); writeStr(8, 'WAVE');
+    writeStr(12, 'fmt '); v.setUint32(16, 16, true); v.setUint16(20, 1, true);
+    v.setUint16(22, 1, true); v.setUint32(24, sampleRate, true);
+    v.setUint32(28, sampleRate * 2, true); v.setUint16(32, 2, true); v.setUint16(34, 16, true);
+    writeStr(36, 'data'); v.setUint32(40, n * 2, true);
+    for (let i = 0; i < n; i++) {
+      const s = Math.max(-1, Math.min(1, mono[i]));
+      v.setInt16(44 + i * 2, s < 0 ? s * 0x8000 : s * 0x7FFF, true);
+    }
+    return new Blob([buf], { type: 'audio/wav' });
+  }
+
+  // DeepFilterNet cleanup, via the worker: takes 48 kHz mono,
+  // returns 48 kHz mono of exactly the same length, then boosted
+  // to a consistent level for listening and editing.
+  let cleanedAudio = null;
+  async function cleanAudio(mono48k) {
+    const out = await send('clean', { audio: mono48k.slice() });
+    return peakNormalise(out.audio, 0.89125, 10);
+  }
   function splitSentences(text) {
     return (text || '').split(/(?<=[.?!])\s+/).map((s) => s.trim()).filter(Boolean);
   }
@@ -670,15 +757,20 @@
     if (!file) return;
     cancelled = false;
     rows = [];
+    cleanedAudio = null;
+    $('downloadCleaned').disabled = true;
     renderRows();
     startBtn.disabled = true;
     cancelBtn.disabled = false;
     try {
       setStatus('Reading audio from the video...', 2);
       detailEl.textContent = 'This can take a moment for a long file.';
-      const audio = await extractAudio(file);
+      const extracted = await extractAudio(file);
       if (cancelled) return;
-      const minutes = (audio.length / 16000 / 60).toFixed(1);
+      // The 16 kHz feed Whisper hears: high-passed at 80 Hz and
+      // peak-normalised. The full-rate audio is kept for cleanup.
+      const audio = prepareForTranscription(extracted.mono48k);
+      const minutes = (extracted.seconds / 60).toFixed(1);
       setStatus('Downloading the Whisper model...', 5);
       detailEl.textContent = 'First use downloads the model; afterwards the browser caches it.';
       await send('load');
@@ -706,6 +798,19 @@
       }
       setStatus('Done. ' + rows.length + ' rows.', 100);
       detailEl.textContent = 'Times are HH:MM:SS on every row.';
+      if ($('cleanAudio').checked) {
+        // Cleanup runs last and on the original full-rate audio, not
+        // on the Whisper feed: denoising before transcription usually
+        // makes it worse, so the cleaned audio is a separate
+        // deliverable for listening and editing, not an input.
+        setStatus('Cleaning up the audio...', 95);
+        detailEl.textContent = 'DeepFilterNet 3, running on your device. First use downloads the model (~8 MB).';
+        cleanedAudio = await cleanAudio(extracted.mono48k);
+        if (cancelled) return;
+        $('downloadCleaned').disabled = false;
+        setStatus('Done. ' + rows.length + ' rows, cleaned audio ready.', 100);
+        detailEl.textContent = 'Times are HH:MM:SS on every row.';
+      }
     } catch (e) {
       if (!cancelled) setStatus('Failed: ' + (e && e.message ? e.message : e), progressEl.value);
     } finally {
@@ -737,6 +842,13 @@
       return;
     }
     download(baseName() + '.en.srt', rowsToTranslationSrt(), 'text/plain');
+  });
+  // Cleaned audio: full-length 48 kHz mono WAV, same length as the
+  // video audio, so it lines up with the video when laid back
+  // under it in an editor.
+  $('downloadCleaned').addEventListener('click', () => {
+    if (!cleanedAudio) return;
+    downloadBlob(baseName() + '-clean.wav', encodeWav(cleanedAudio, 48000));
   });
   $('fInterviewer').addEventListener('input', renderRows);
   $('fInterviewees').addEventListener('input', renderRows);

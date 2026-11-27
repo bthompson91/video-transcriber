@@ -20,10 +20,12 @@
 //   { id, type: 'load', model }
 //   { id, type: 'transcribe', audio }  -> timestamped chunks
 //   { id, type: 'translate', text }    -> English text for one row
+//   { id, type: 'clean', audio }       -> cleaned 48 kHz mono audio
 // Messages out:
 //   { id, ok: true, ... } / { id, ok: false, error } /
 //   { id, progress: 'Downloading... 42%' }
 import { pipeline } from 'https://cdn.jsdelivr.net/npm/@huggingface/transformers@3.5.1';
+import { cleanAudio48k } from './df3.js';
 
 let transcriberPromise = null;
 let loadedModel = '';
@@ -143,6 +145,15 @@ self.onmessage = async (event) => {
         text = out.translation_text || out.text || '';
       }
       self.postMessage({ id, ok: true, text });
+    } else if (msg.type === 'clean') {
+      // DeepFilterNet 3 cleanup on the ORIGINAL full-rate audio, not
+      // on the Whisper feed: denoising before transcription usually
+      // makes it worse, so the cleaned audio is a separate
+      // deliverable for listening and editing. The returned array
+      // is 48 kHz mono, exactly the same length as the input, so it
+      // stays in sync with the video. Transferred, not copied.
+      const cleaned = await cleanAudio48k(msg.audio, (text) => self.postMessage({ id, progress: text }));
+      self.postMessage({ id, ok: true, audio: cleaned }, [cleaned.buffer]);
     } else {
       self.postMessage({ id, ok: false, error: 'Unknown message type.' });
     }

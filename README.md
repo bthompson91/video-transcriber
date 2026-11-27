@@ -11,7 +11,7 @@ the browser afterwards) and transcribes the audio on your device.
 Phone decoding: iOS Safari cannot decode .mts / .m2ts (AVCHD) and
 chokes on some iPhone-recorded .mov files too, so if the browser's
 own decoder fails, the page falls back to ffmpeg.wasm to convert the
-file to a 16 kHz mono WAV in the browser first. It uses the
+file to a 48 kHz mono WAV in the browser first. It uses the
 single-threaded core (@ffmpeg/core-st 0.11.1, with mainName 'main'):
 the normal core needs SharedArrayBuffer, which needs cross-origin
 isolation headers that GitHub Pages does not send. One-time ~30 MB
@@ -85,7 +85,7 @@ there. Dark mode follows the device setting
 
 ## Downloads
 
-Two download options, both named after the video file:
+Four download options, all named after the video file:
 
 - Word (.docx): the full sheet - title, header form, then the
   CLIP NUMBER / Time Code / Transcription / INTERVIEW table.
@@ -99,9 +99,37 @@ Two download options, both named after the video file:
   as the English subtitle track for the video. Rows with no
   translation are skipped. Edited translations come through here
   too.
+- Cleaned audio (.wav): the video's audio with background noise
+  reduced and speech boosted, full length and in sync with the
+  video, for listening or laying back under the video in an
+  editor. Only made when the Clean up audio box is ticked.
 
-`IMG_3436.MOV` downloads as `IMG_3436.docx`, `IMG_3436.srt`, and
-`IMG_3436.en.srt` for the translation subtitles.
+`IMG_3436.MOV` downloads as `IMG_3436.docx`, `IMG_3436.srt`,
+`IMG_3436.en.srt` for the translation subtitles, and
+`IMG_3436-clean.wav` for the cleaned audio.
+
+## Audio preparation and cleanup
+
+What Whisper hears is the video audio downmixed to mono, resampled
+to 16 kHz, high-pass filtered at 80 Hz (removes rumble - HVAC,
+traffic, handling noise - below the speech range) and peak
+normalised to -1 dBFS, with the boost capped at +20 dB so
+near-silent audio does not get its noise floor amplified. That is
+the preprocessing that reliably helps transcription.
+
+Denoising is deliberately not on the transcription path:
+enhancement before Whisper usually makes transcription worse
+(Whisper is trained on noisy audio; denoisers strip speech
+harmonics along with the noise). So cleanup is a separate
+deliverable. Tick Clean up audio and the page runs DeepFilterNet 3
+on the original 48 kHz mono audio after transcription, then offers
+the cleaned .wav: full length, 48 kHz mono, exactly the same
+number of samples as the source, so it lines up with the video,
+peak-normalised so the speech is louder. DeepFilterNet 3
+(~8 MB of models plus a ~10 MB WASM runtime) runs entirely in the
+browser, on your device, and only downloads when the box is
+ticked. A 15 s clip cleans in a few seconds; a 10 min file takes
+a few minutes.
 
 ## Header form
 
@@ -142,14 +170,30 @@ they are ~2.3 GB total, bigger than int8, because NLLB's huge
 WASM, not WebGPU, because WebGPU translation crashes in
 transformers.js.
 
+Cleanup uses DeepFilterNet 3 (Rikorose/DeepFilterNet, mirrored at
+trysem/DeepFilterNet3 on Hugging Face Hub): the WASM runtime
+(df_bg.wasm, ~10 MB) and the model tarball
+(DeepFilterNet3_onnx.tar.gz, ~8 MB: enc, erb_dec and df_dec ONNX
+graphs) load from Hugging Face only when the Clean up audio box is
+ticked. The app drives the WASM directly, frame by frame (480
+samples = 10 ms), with ~120 lines of hand-written wasm-bindgen
+glue in `docs/df3.js` - the npm package for it is worklet-only
+(realtime mic) and its default CDN is dead, so it is not used.
+Single-threaded WASM, no SharedArrayBuffer needed. The model's
+30 ms algorithmic delay is removed from the front of the output,
+so the cleaned audio is exactly the input length.
+
 ## Files
 
 - `docs/index.html` - the page and header form
-- `docs/app.js` - audio extraction, row grouping, translation, export
+- `docs/app.js` - audio extraction, transcription-path prep
+  (high-pass + normalisation), row grouping, translation, export
 - `docs/worker.js` - Whisper in a Web Worker (transformers.js,
-  `onnx-community/whisper-small` or `whisper-large-v3-turbo`) and
-  the local translation model (NLLB-200 distilled 600M, from
-  Hugging Face Hub)
+  `onnx-community/whisper-small` or `whisper-large-v3-turbo`), the
+  local translation model (NLLB-200 distilled 600M, from
+  Hugging Face Hub), and the DeepFilterNet cleanup
+- `docs/df3.js` - DeepFilterNet 3 WASM glue and offline
+  file-cleaning (48 kHz mono in, same-length 48 kHz mono out)
 - `docs/style.css`
 
 ## Publishing
